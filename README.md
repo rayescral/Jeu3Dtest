@@ -1,8 +1,8 @@
-# Le Gardien des Cristaux
+# Ascendance
 
-Petit jeu d'aventure en 3D dans le navigateur, fait avec [Three.js](https://threejs.org/).
+Jeu de vol à voile en 3D dans le navigateur, fait avec [Three.js](https://threejs.org/).
 
-Tu incarnes un chevalier échoué sur une île. Les cinq cristaux qui alimentent le portail de l'île sont gardés par des slimes. Récupère-les, affronte le Roi Slime qui se réveille au centre de l'île, puis franchis le portail pour gagner.
+Tu pilotes un planeur de 15 m d'envergure au-dessus d'une vallée alpine. Pas de moteur : pour rester en l'air, il faut trouver l'air qui monte. Les thermiques se forment sous les cumulus, dérivent avec le vent puis s'éteignent, et le vent d'ouest fait monter l'air le long des versants exposés. Le but est de contourner les trois points de virage, puis de revenir te poser sur la piste.
 
 ## Lancer le jeu
 
@@ -12,39 +12,47 @@ Il faut un petit serveur local, car le navigateur bloque les modules JavaScript 
 python3 -m http.server 8000
 ```
 
-Ensuite, ouvre http://localhost:8000.
+Ensuite, ouvre http://localhost:8000. Ajoute `#lite` à l'adresse pour une version plus légère (moins d'arbres, sans ombres) ; elle s'active d'office sur téléphone et tablette.
 
 ## Commandes
 
 | Touche | Action |
 | --- | --- |
-| ZQSD / WASD / flèches | Se déplacer (par rapport à la caméra) |
-| Maj | Courir |
-| Espace | Sauter |
-| Clic / J / F | Coup d'épée |
-| Souris (glisser ou pointeur verrouillé) | Tourner la caméra |
-| Molette | Zoomer |
+| ↑ / Z / W | Piquer (pousser le manche) |
+| ↓ / S | Cabrer (tirer le manche) |
+| ← → / Q D | Incliner pour virer |
+| Espace | Aérofreins |
+| Souris (glisser) | Regarder autour |
+| C | Vue extérieure / vue pilote |
+| T | Accélérer le temps (×3) |
+| P ou Échap | Pause |
+| M | Couper le son |
 
-Sur téléphone : joystick virtuel à gauche, glisse à droite de l'écran pour tourner la caméra, boutons ⚔ (attaque) et ⤒ (saut).
+Sur téléphone : joystick virtuel à gauche, glisse à droite pour regarder, boutons « Aérofreins » et « Caméra ».
 
-## Règles
+## Comment voler
 
-- 6 cœurs de vie. Un slime qui te touche retire 1 cœur, le Roi Slime en retire 2.
-- Les slimes vaincus laissent parfois un cœur qui rend 1 point de vie.
-- Les 5 cristaux réveillent le Roi Slime. Son saut crée une onde de choc : saute pour l'éviter.
-- Une fois le roi vaincu, le portail s'allume : entre dedans pour gagner.
+- **Le variomètre bipe quand tu montes.** Plus il bipe vite et aigu, plus ça monte. Incline à 35-45° et tire un peu pour rester dans l'ascendance.
+- **Vole vers 90-100 km/h** en ligne droite : c'est la vitesse de meilleur plané (finesse d'environ 45).
+- **En virage serré, la vitesse de décrochage augmente.** Sous environ 70 km/h en ligne droite, ou plus en virage, l'aile décroche et le nez tombe.
+- **« Marge retour terrain »** indique l'altitude qu'il te reste au-dessus de ce qu'il faut pour rentrer en plané.
+- **Pour atterrir** : moins de 140 km/h, ailes à plat, descente douce (moins de 3,5 m/s), sur un terrain plat sans arbres. Se poser ailleurs que sur la piste s'appelle « aller aux vaches ».
 
 ## Organisation du code
 
 | Fichier | Rôle |
 | --- | --- |
-| `index.html`, `style.css` | Page, menus et interface (vies, cristaux, carte, barre du boss) |
-| `src/main.js` | Boucle de jeu, caméra, règles de la partie, mini-carte |
-| `src/world.js` | L'île : relief, eau, ciel, arbres, rochers, ruines, portail, collisions |
-| `src/player.js` | Le chevalier : modèle, déplacements, saut, attaque, animations |
-| `src/enemies.js` | Les slimes et le Roi Slime |
+| `index.html`, `style.css` | Page, menus, tableau de bord |
+| `src/main.js` | Boucle principale, caméras, règles (circuit, atterrissage), écrans |
+| `src/heightmap.js` | Le relief : fonction d'altitude, lac, piste, forêts (sans Three.js) |
+| `src/noise.js` | Bruit simplex et ses variantes fractales |
+| `src/terrain.js` | Rendu du paysage : shader de matières, éclairage pré-calculé, forêts, eau, aérodrome |
+| `src/sky.js` | Ciel atmosphérique, soleil, éclairage d'environnement, brume, cumulus |
+| `src/air.js` | Masse d'air : vent, thermiques (cycle de vie, dérive), ascendances de pente |
+| `src/glider.js` | Modèle 3D du planeur (profils d'aile réels) et mécanique de vol |
+| `src/course.js` | Points de virage et colonnes de lumière |
+| `src/hud.js` | Instruments (anémomètre, variomètre, altimètre) et carte |
 | `src/input.js` | Clavier, souris et commandes tactiles |
-| `src/effects.js` | Particules et ondes de choc |
-| `src/audio.js` | Bruitages générés avec la Web Audio API |
+| `src/audio.js` | Souffle du vent et bips du variomètre (Web Audio) |
 
-Pour tester, la console du navigateur donne accès à `__jeu` (par exemple `__jeu.player.hp = 99`).
+Pour tester, la console du navigateur donne accès à `__jeu` (par exemple `__jeu.glider.pos.y = 2500`).

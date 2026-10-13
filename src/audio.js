@@ -1,59 +1,84 @@
-// Bruitages synthétisés avec la Web Audio API : aucun fichier son à charger.
+// Sons synthétisés avec la Web Audio API : souffle du vent et bips du variomètre.
 export function createAudio() {
-  let ctx = null;
-  let muted = false;
+  let ctx = null, muted = false;
+  let windGain, windFilter, sinkOsc, sinkGain, master;
+  let nextBeep = 0;
 
-  function ensure() {
-    if (!ctx) {
-      const AC = window.AudioContext || window.webkitAudioContext;
-      if (!AC) return null;
-      ctx = new AC();
+  function init() {
+    if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    master = ctx.createGain();
+    master.connect(ctx.destination);
+
+    // Bruit rose en boucle filtré : le souffle sur la verrière.
+    const len = ctx.sampleRate * 2, buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    let b0 = 0, b1 = 0, b2 = 0;
+    for (let i = 0; i < len; i++) {
+      const w = Math.random() * 2 - 1;
+      b0 = 0.997 * b0 + w * 0.029; b1 = 0.985 * b1 + w * 0.032; b2 = 0.95 * b2 + w * 0.048;
+      d[i] = (b0 + b1 + b2) * 0.35;
     }
-    if (ctx.state === 'suspended') ctx.resume();
-    return ctx;
+    const src = ctx.createBufferSource();
+    src.buffer = buf; src.loop = true;
+    windFilter = ctx.createBiquadFilter(); windFilter.type = 'lowpass'; windFilter.frequency.value = 600; windFilter.Q.value = 0.7;
+    windGain = ctx.createGain(); windGain.gain.value = 0;
+    src.connect(windFilter).connect(windGain).connect(master);
+    src.start();
+
+    // Grondement grave quand ça descend fort.
+    sinkOsc = ctx.createOscillator(); sinkOsc.type = 'sine'; sinkOsc.frequency.value = 260;
+    sinkGain = ctx.createGain(); sinkGain.gain.value = 0;
+    sinkOsc.connect(sinkGain).connect(master);
+    sinkOsc.start();
   }
 
-  function tone(freq, dur, { type = 'square', vol = 0.15, slide = null, delay = 0 } = {}) {
-    if (muted || !ensure()) return;
-    const t = ctx.currentTime + delay;
-    const o = ctx.createOscillator(), g = ctx.createGain();
-    o.type = type;
-    o.frequency.setValueAtTime(freq, t);
-    if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
-    g.gain.setValueAtTime(vol, t);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    o.connect(g).connect(ctx.destination);
+  function beep(freq, dur, vol = 0.07, type = 'square') {
+    if (!ctx || muted) return;
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator(), g = ctx.createGain(), f = ctx.createBiquadFilter();
+    o.type = type; o.frequency.value = freq;
+    f.type = 'lowpass'; f.frequency.value = 2200;
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.005);
+    g.gain.setValueAtTime(vol, t + dur - 0.01);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    o.connect(f).connect(g).connect(master);
     o.start(t); o.stop(t + dur + 0.02);
   }
 
-  function noise(dur, { vol = 0.2, freq = 1200, delay = 0 } = {}) {
-    if (muted || !ensure()) return;
-    const t = ctx.currentTime + delay;
-    const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * dur), ctx.sampleRate);
-    const data = buf.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    const src = ctx.createBufferSource(), f = ctx.createBiquadFilter(), g = ctx.createGain();
-    src.buffer = buf; f.type = 'bandpass'; f.frequency.value = freq;
-    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    src.connect(f).connect(g).connect(ctx.destination);
-    src.start(t);
-  }
-
   return {
-    unlock: ensure,
-    toggle() { muted = !muted; return muted; },
+    init,
     get muted() { return muted; },
-    swing: () => noise(0.18, { vol: 0.25, freq: 2500 }),
-    hit: () => { tone(220, 0.12, { slide: 80, vol: 0.2 }); noise(0.1, { vol: 0.2, freq: 800 }); },
-    kill: () => { tone(500, 0.08, { type: 'triangle' }); tone(300, 0.2, { type: 'triangle', slide: 60, delay: 0.06 }); },
-    hurt: () => tone(160, 0.3, { type: 'sawtooth', slide: 60, vol: 0.2 }),
-    jump: () => tone(300, 0.15, { type: 'triangle', slide: 600, vol: 0.12 }),
-    pickup: () => [660, 880, 1320].forEach((f, i) => tone(f, 0.18, { type: 'triangle', vol: 0.15, delay: i * 0.07 })),
-    heal: () => [520, 780].forEach((f, i) => tone(f, 0.2, { type: 'sine', vol: 0.2, delay: i * 0.08 })),
-    stomp: () => { tone(90, 0.4, { type: 'sine', slide: 40, vol: 0.4 }); noise(0.3, { vol: 0.3, freq: 300 }); },
-    roar: () => { tone(110, 0.9, { type: 'sawtooth', slide: 55, vol: 0.25 }); tone(165, 0.9, { type: 'sawtooth', slide: 70, vol: 0.15 }); },
-    portal: () => [392, 523, 659, 784, 1046].forEach((f, i) => tone(f, 0.35, { type: 'sine', vol: 0.18, delay: i * 0.1 })),
-    win: () => [523, 659, 784, 1046, 784, 1046].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.18, delay: i * 0.13 })),
-    lose: () => [392, 330, 262, 196].forEach((f, i) => tone(f, 0.35, { type: 'triangle', vol: 0.18, delay: i * 0.18 })),
+    toggle() {
+      muted = !muted;
+      if (master) master.gain.value = muted ? 0 : 1;
+      return muted;
+    },
+    // speed en m/s, vario en m/s, flying = faux une fois posé.
+    update(speed, vario, flying, stalled) {
+      if (!ctx) return;
+      const t = ctx.currentTime;
+      const k = flying ? Math.min(1, Math.max(0, (speed - 8) / 60)) : 0;
+      windGain.gain.setTargetAtTime(0.05 + k * k * 0.5, t, 0.2);
+      windFilter.frequency.setTargetAtTime(250 + speed * 22, t, 0.2);
+      // Variomètre : bips d'autant plus aigus et rapides que l'on monte vite.
+      if (flying && vario > 0.25) {
+        if (t >= nextBeep) {
+          const period = Math.max(0.12, 0.55 - vario * 0.08);
+          beep(520 + Math.min(vario, 6) * 110, period * 0.5);
+          nextBeep = t + period;
+        }
+      } else {
+        nextBeep = t;
+      }
+      const sink = flying && vario < -2.2 ? Math.min(1, (-vario - 2.2) / 3) : 0;
+      sinkGain.gain.setTargetAtTime(sink * 0.05, t, 0.15);
+      sinkOsc.frequency.setTargetAtTime(240 - sink * 60, t, 0.2);
+      if (stalled && flying && Math.random() < 0.08) beep(180, 0.06, 0.08, 'sawtooth');
+    },
+    chime() { [660, 880, 1100].forEach((f, i) => setTimeout(() => beep(f, 0.16, 0.08, 'triangle'), i * 120)); },
+    thud() { beep(90, 0.25, 0.25, 'sine'); },
   };
 }

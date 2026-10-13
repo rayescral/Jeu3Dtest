@@ -1,409 +1,307 @@
-// Point d'entrée : boucle de jeu, caméra, règles de la partie et interface.
+// Ascendance : boucle principale, caméra, règles du vol (atterrissage, circuit) et écrans.
 import * as THREE from 'three';
-import { clamp, damp } from './util.js';
-import { createWorld, heightAt, ISLAND_R } from './world.js';
-import { Player, MAX_HP } from './player.js';
-import { Slime } from './enemies.js';
-import { Effects } from './effects.js';
+import { damp } from './util.js';
+import { heightAt, gradientAt, forestAt, WATER_LEVEL, AIRFIELD, PLAY_RADIUS } from './heightmap.js';
+import { createTerrain } from './terrain.js';
+import { createSky, createClouds } from './sky.js';
+import { createAir, WIND } from './air.js';
+import { Glider, V_NE } from './glider.js';
+import { createCourse, TURNPOINTS } from './course.js';
+import { createHud } from './hud.js';
 import { createInput } from './input.js';
 import { createAudio } from './audio.js';
 
 const $ = id => document.getElementById(id);
 
-// --- Rendu ------------------------------------------------------------------------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-renderer.setSize(innerWidth, innerHeight);
+// --- Rendu -------------------------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.55;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
 $('game').appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 900);
-function fitCamera() {
-  camera.aspect = innerWidth / innerHeight;
-  camera.fov = camera.aspect < 1 ? 78 : 60;   // écran vertical (téléphone) : champ plus large
-  camera.updateProjectionMatrix();
+const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 70000);
+function fit() {
   renderer.setSize(innerWidth, innerHeight);
+  camera.aspect = innerWidth / innerHeight;
+  camera.fov = camera.aspect < 1 ? 80 : 62;
+  camera.updateProjectionMatrix();
 }
-addEventListener('resize', fitCamera);
-fitCamera();
+addEventListener('resize', fit);
+fit();
 
-const world = createWorld(scene);
-const player = new Player(scene);
-const effects = new Effects(scene);
+// Laisse le navigateur afficher l'écran de chargement avant de générer la vallée.
+await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));
+
+// Réglage allégé pour les téléphones et tablettes (ou en ajoutant #lite à l'adresse).
+const LITE = matchMedia('(pointer: coarse)').matches || location.hash === '#lite';
+if (LITE) { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; }
+
+const sky = createSky(renderer, scene);
+const terrain = createTerrain(scene, sky.sunDir, { lite: LITE });
+const air = createAir(TURNPOINTS);
+const clouds = createClouds(scene, air.thermals);
+const course = createCourse(scene);
+const glider = new Glider(scene);
+const hud = createHud();
 const input = createInput(renderer.domElement);
 const audio = createAudio();
 
-// --- Caméra à la troisième personne -------------------------------------------------
-const cam = { yaw: 0, pitch: 0.35, dist: 8, cur: 8, target: new THREE.Vector3(), shake: 0 };
-const ray = new THREE.Raycaster();
-function updateCamera(dt) {
-  cam.yaw -= input.lookX * 0.0025;
-  cam.pitch = clamp(cam.pitch + input.lookY * 0.002, -0.15, 1.2);
-  cam.dist = clamp(cam.dist + input.zoom * 0.8, 4, 16);
-  const focus = player.pos.clone().add(new THREE.Vector3(0, 1.7, 0));
-  cam.target.x = damp(cam.target.x, focus.x, 12, dt);
-  cam.target.y = damp(cam.target.y, focus.y, 8, dt);
-  cam.target.z = damp(cam.target.z, focus.z, 12, dt);
-  const off = new THREE.Vector3(
-    Math.sin(cam.yaw) * Math.cos(cam.pitch),
-    Math.sin(cam.pitch),
-    Math.cos(cam.yaw) * Math.cos(cam.pitch),
-  ).multiplyScalar(cam.dist);
-  // Si un arbre ou une colonne se trouve entre le héros et la caméra, on avance la caméra.
-  const dir = off.clone().normalize();
-  ray.set(cam.target, dir);
-  ray.far = cam.dist;
-  const hit = ray.intersectObjects(world.occluders, true)[0];
-  const want = hit ? Math.max(1.5, hit.distance - 0.4) : cam.dist;
-  cam.cur = want < cam.cur ? want : damp(cam.cur, want, 4, dt);
-  camera.position.copy(cam.target).addScaledVector(dir, cam.cur);
-  const floor = heightAt(camera.position.x, camera.position.z) + 0.6;
-  if (camera.position.y < floor) camera.position.y = floor;
-  cam.shake = Math.max(0, cam.shake - dt * 2.5);
-  const s = cam.shake * cam.shake;
-  camera.position.add(new THREE.Vector3((Math.random() - 0.5) * s, (Math.random() - 0.5) * s, (Math.random() - 0.5) * s));
-  camera.lookAt(cam.target);
-}
-
-// --- Cristaux et cœurs à ramasser -----------------------------------------------------
-const crystalGeo = new THREE.OctahedronGeometry(0.6, 0);
-const crystals = world.crystalSpots.map(spot => {
-  const mesh = new THREE.Mesh(crystalGeo, new THREE.MeshStandardMaterial({
-    color: 0x6ff3ff, emissive: 0x1aa6c9, emissiveIntensity: 0.9, roughness: 0.1, metalness: 0.2, flatShading: true,
-  }));
-  mesh.scale.set(1, 1.6, 1);
-  mesh.castShadow = true;
-  const light = new THREE.PointLight(0x6ff3ff, 8, 9);
-  scene.add(mesh, light);
-  return { spot, mesh, light, taken: false };
-});
-
-const heartShape = new THREE.Shape();
-heartShape.moveTo(0, -0.5);
-heartShape.bezierCurveTo(-0.15, -0.3, -0.6, -0.1, -0.5, 0.2);
-heartShape.bezierCurveTo(-0.4, 0.5, -0.05, 0.5, 0, 0.25);
-heartShape.bezierCurveTo(0.05, 0.5, 0.4, 0.5, 0.5, 0.2);
-heartShape.bezierCurveTo(0.6, -0.1, 0.15, -0.3, 0, -0.5);
-const heartGeo = new THREE.ExtrudeGeometry(heartShape, { depth: 0.2, bevelEnabled: true, bevelSize: 0.05, bevelThickness: 0.05, bevelSegments: 2 });
-heartGeo.center();
-const heartMat = new THREE.MeshStandardMaterial({ color: 0xff4d6d, emissive: 0x801030, roughness: 0.3 });
-const hearts = [];
-function dropHeart(pos) {
-  const m = new THREE.Mesh(heartGeo, heartMat);
-  m.castShadow = true;
-  m.position.copy(pos);
-  scene.add(m);
-  hearts.push({ m, base: heightAt(pos.x, pos.z) + 0.8, t: Math.random() * 6, life: 20 });
-}
-
-// --- État de la partie --------------------------------------------------------------
+// --- État de la partie ----------------------------------------------------------------------
 const game = {
-  state: 'menu',            // menu | play | dead | won
-  enemies: [],
-  boss: null,
-  collected: 0,
-  kills: 0,
-  time: 0,
-  respawnT: 0,
-  hitStop: 0,
-  audio,
-  dust: (pos, n) => effects.burst(pos.clone().add(new THREE.Vector3(0, 0.1, 0)), { color: 0xd8c8a0, count: n, speed: 3, up: 2, size: 0.15, life: 0.5 }),
-  onPlayerHurt() {
-    audio.hurt();
-    cam.shake = 0.7;
-    flashVignette();
-    effects.burst(player.pos.clone().add(new THREE.Vector3(0, 1.2, 0)), { color: 0xff5050, count: 10, speed: 4 });
-  },
-  playerStrike(pos, facing, range) {
-    const fx = Math.sin(facing), fz = Math.cos(facing);
-    let touched = false;
-    for (const e of [...game.enemies]) {
-      if (e.dead) continue;
-      const dx = e.pos.x - pos.x, dz = e.pos.z - pos.z, d = Math.hypot(dx, dz);
-      const reach = range + e.radius * 0.8;
-      if (d > reach || Math.abs(e.pos.y - pos.y) > e.size * 2 + 1.5) continue;
-      const dot = d > 0.01 ? (dx * fx + dz * fz) / d : 1;
-      if (dot < 0.3 && d > e.radius + 0.6) continue;   // derrière le héros
-      e.hit(1, pos);
-      touched = true;
-      const at = e.pos.clone().add(new THREE.Vector3(0, e.size, 0));
-      effects.burst(at, { color: 0xfff3b0, count: 8, speed: 7, up: 3, size: 0.12, life: 0.35, glow: true });
-      if (e.dead) killEnemy(e);
-    }
-    if (touched) { audio.hit(); game.hitStop = 0.06; cam.shake = Math.max(cam.shake, 0.4); }
-  },
-  bossLanded(b) {
-    audio.stomp();
-    effects.ring(b.pos, { color: 0xc59bff, radius: 7, life: 0.55 });
-    game.dust(b.pos, 16);
-    const d = Math.hypot(player.pos.x - b.pos.x, player.pos.z - b.pos.z);
-    cam.shake = Math.max(cam.shake, clamp(1.2 - d / 25, 0.2, 1));
-    if (player.onGround && d < 6.5) player.hurt(1, b.pos, game);
-    // Le roi appelle des renforts de temps en temps.
-    if (b.hops % 5 === 0 && game.enemies.length < 14) {
-      for (let i = 0; i < 2; i++) {
-        const a = Math.random() * Math.PI * 2;
-        spawnSlime(b.pos.x + Math.cos(a) * 4, b.pos.z + Math.sin(a) * 4, true);
-      }
-    }
-  },
+  state: 'menu',         // menu | fly | ground | paused | end
+  time: 0, distance: 0, maxAlt: 0, bestClimb: 0,
+  camMode: 'chase',
+  warp: 1,
+  varioAvg: 0,
+  onField: false,
 };
 
-function spawnSlime(x, z, aggro = false) {
-  const s = new Slime(scene, x, z);
-  s.aggro = aggro;
-  game.enemies.push(s);
-  return s;
+const START = { x: AIRFIELD.x + 250, z: AIRFIELD.z + 300, alt: AIRFIELD.h + 900 };
+
+// --- Caméra -----------------------------------------------------------------------------------
+const camQ = new THREE.Quaternion();
+const UP = new THREE.Vector3(0, 1, 0), RIGHT = new THREE.Vector3(1, 0, 0);
+let shake = 0;
+let yaw = 0;
+
+function reset() {
+  glider.place(START.x, START.alt, START.z, 0);
+  course.reset();
+  Object.assign(game, { time: 0, distance: 0, maxAlt: START.alt, bestClimb: 0, varioAvg: 0, warp: 1, onField: false });
+  camQ.copy(glider.quat);
 }
 
-function killEnemy(e) {
-  game.kills++;
-  const at = e.pos.clone().add(new THREE.Vector3(0, e.size, 0));
-  effects.burst(at, { color: e.mat.color.getHex(), count: e.boss ? 60 : 16, speed: e.boss ? 12 : 6, up: e.boss ? 10 : 5, size: e.boss ? 0.4 : 0.2, life: e.boss ? 1.4 : 0.8 });
-  audio.kill();
-  e.dispose();
-  game.enemies.splice(game.enemies.indexOf(e), 1);
-  if (e.boss) {
-    game.boss = null;
-    $('boss').hidden = true;
-    world.activatePortal();
-    audio.portal();
-    banner('Le portail est ouvert !', 'Entre dans le portail au centre de l\'île');
-    // Les derniers slimes fuient la place.
-    for (const s of game.enemies) s.aggro = false;
-  } else if (Math.random() < 0.3 || player.hp <= 2) {
-    dropHeart(at);
-  }
-}
-
-function collectCrystal(c) {
-  c.taken = true;
-  c.mesh.visible = false;
-  c.light.intensity = 0;
-  game.collected++;
-  audio.pickup();
-  effects.burst(c.mesh.position, { color: 0x6ff3ff, count: 24, speed: 6, up: 6, size: 0.18, glow: true, life: 1 });
-  if (game.collected === crystals.length) {
-    const b = new Slime(scene, 0, -6, { boss: true });
-    b.aggro = true;
-    game.enemies.push(b);
-    game.boss = b;
-    $('boss').hidden = false;
-    audio.roar();
-    cam.shake = 1;
-    banner('Le Roi Slime se réveille !', 'Il garde le portail au centre de l\'île');
+function updateCamera(dt) {
+  const look = new THREE.Quaternion().setFromAxisAngle(UP, -input.lookX)
+    .multiply(new THREE.Quaternion().setFromAxisAngle(RIGHT, -input.lookY));
+  if (game.camMode === 'cockpit') {
+    camera.position.copy(new THREE.Vector3(0, 0.4, -2.05).applyQuaternion(glider.quat).add(glider.pos));
+    camera.quaternion.copy(glider.quat).multiply(look);
+    camera.near = 0.05;
   } else {
-    banner(`Cristal ${game.collected} / ${crystals.length}`, `Encore ${crystals.length - game.collected} à trouver`);
+    // La caméra suit avec un léger retard et n'accompagne qu'en partie l'inclinaison.
+    camQ.slerp(glider.quat, 1 - Math.exp(-3.2 * dt));
+    const level = new THREE.Quaternion().setFromAxisAngle(UP, -glider.heading);
+    const q = camQ.clone().slerp(level, 0.35).multiply(look);
+    camera.position.copy(glider.pos).add(new THREE.Vector3(0, 2.8, 16).applyQuaternion(q));
+    const floor = Math.max(heightAt(camera.position.x, camera.position.z), WATER_LEVEL) + 1.5;
+    if (camera.position.y < floor) camera.position.y = floor;
+    camera.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(RIGHT, -0.1));
+    camera.near = 0.3;
+  }
+  if (shake > 0) {
+    shake = Math.max(0, shake - dt);
+    camera.position.add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(shake * 0.4));
+  }
+  // Turbulence légère, plus forte dans les thermiques et à grande vitesse.
+  const turb = game.state === 'fly' ? 0.002 + Math.abs(glider.lift) * 0.0015 + glider.speed * 0.00004 : 0;
+  camera.rotateZ((Math.random() - 0.5) * turb);
+  camera.updateProjectionMatrix();
+  glider.pilot.visible = game.camMode !== 'cockpit';
+  const inCockpit = game.camMode === 'cockpit' && game.state !== 'menu' && game.state !== 'end';
+  $('cockpit').hidden = !inCockpit;
+  if (inCockpit) {
+    // Le fil de laine sur la verrière : il part de travers quand le planeur dérape ou que l'air est agité.
+    yaw = damp(yaw, -glider.ail * 18 + (Math.random() - 0.5) * (4 + Math.abs(glider.lift) * 4), 6, dt);
+    $('yaw-string').setAttribute('d', `M500 42 q ${yaw * 0.4} 30 ${yaw} 70`);
   }
 }
 
-function resetGame() {
-  for (const e of game.enemies) e.dispose();
-  game.enemies.length = 0;
-  for (const h of hearts) scene.remove(h.m);
-  hearts.length = 0;
-  effects.clear();
-  for (const c of crystals) {
-    c.taken = false; c.mesh.visible = true; c.light.intensity = 8;
-    c.mesh.position.set(c.spot.x, c.spot.y, c.spot.z);
-    c.light.position.copy(c.mesh.position);
-    // Trois gardiens autour de chaque cristal.
-    for (let i = 0; i < 3; i++) {
-      const a = (i / 3) * Math.PI * 2 + Math.random();
-      spawnSlime(c.spot.x + Math.cos(a) * 5, c.spot.z + Math.sin(a) * 5);
-    }
-  }
-  for (let i = 0; i < 6; i++) {
-    const p = world.randomSpot(20, 50, 1);
-    if (p) spawnSlime(p.x, p.z);
-  }
-  world.deactivatePortal();
-  game.boss = null;
-  game.collected = 0; game.kills = 0; game.time = 0; game.respawnT = 0;
-  player.reset(new THREE.Vector3(0, 0, 14));
-  cam.yaw = 0; cam.pitch = 0.35; cam.dist = 8; cam.cur = 8;
-  cam.target.copy(player.pos);
-  $('boss').hidden = true;
+// --- Écrans -----------------------------------------------------------------------------------
+function show(id) {
+  for (const s of ['menu', 'pause', 'end']) $(s).hidden = s !== id;
+  $('hud').hidden = !(id === null || id === 'pause');
+  input.enabled = id === null;
+  if (id) input.releaseAll();
 }
 
-// --- Interface -----------------------------------------------------------------------
-let bannerTimer = null;
-function banner(title, sub = '') {
+let bannerTimer;
+function banner(title, sub = '', ms = 3500) {
   $('banner-title').textContent = title;
   $('banner-sub').textContent = sub;
   const el = $('banner');
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => el.classList.remove('show'), 2800);
-}
-function flashVignette() {
-  const v = $('vignette');
-  v.classList.remove('hit'); void v.offsetWidth; v.classList.add('hit');
+  bannerTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
-function objectiveText() {
-  if (game.boss) return 'Bats le Roi Slime';
-  if (world.portal.active) return 'Entre dans le portail au centre';
-  return `Trouve les cristaux (${game.collected}/${crystals.length})`;
-}
-
-let lastHud = '';
-function updateHud() {
-  let h = '';
-  for (let i = 0; i < MAX_HP; i++) h += `<span class="heart${i < player.hp ? '' : ' empty'}">♥</span>`;
-  const key = h + game.collected + objectiveText() + (game.boss ? game.boss.hp : '');
-  if (key !== lastHud) {
-    lastHud = key;
-    $('hearts').innerHTML = h;
-    $('crystals').textContent = `${game.collected} / ${crystals.length}`;
-    $('objective').textContent = objectiveText();
-    if (game.boss) $('boss-fill').style.width = `${(game.boss.hp / game.boss.maxHp) * 100}%`;
-  }
-  $('timer').textContent = formatTime(game.time);
-}
-const formatTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-
-// Mini-carte : l'île vue du dessus, le cône indique où regarde la caméra.
-const map = $('minimap'), mctx = map.getContext('2d');
-function drawMinimap() {
-  const W = map.width, c = W / 2, s = (W / 2 - 6) / ISLAND_R;
-  mctx.clearRect(0, 0, W, W);
-  mctx.fillStyle = '#2f8fc9'; mctx.beginPath(); mctx.arc(c, c, c, 0, Math.PI * 2); mctx.fill();
-  mctx.fillStyle = '#e6d29a'; mctx.beginPath(); mctx.arc(c, c, (ISLAND_R - 6) * s, 0, Math.PI * 2); mctx.fill();
-  mctx.fillStyle = '#5fae45'; mctx.beginPath(); mctx.arc(c, c, (ISLAND_R - 10) * s, 0, Math.PI * 2); mctx.fill();
-  mctx.fillStyle = '#c9c1ae'; mctx.beginPath(); mctx.arc(c, c, 12 * s, 0, Math.PI * 2); mctx.fill();
-  mctx.fillStyle = world.portal.active ? '#b48cff' : '#777'; mctx.beginPath(); mctx.arc(c, c, 3, 0, Math.PI * 2); mctx.fill();
-  for (const cr of crystals) {
-    if (cr.taken) continue;
-    const x = c + cr.spot.x * s, y = c + cr.spot.z * s;
-    mctx.fillStyle = '#6ff3ff'; mctx.strokeStyle = '#0b4f63'; mctx.lineWidth = 1.5;
-    mctx.beginPath(); mctx.moveTo(x, y - 6); mctx.lineTo(x + 4, y); mctx.lineTo(x, y + 6); mctx.lineTo(x - 4, y); mctx.closePath();
-    mctx.fill(); mctx.stroke();
-  }
-  for (const e of game.enemies) {
-    mctx.fillStyle = e.boss ? '#8e44ec' : '#d33';
-    mctx.beginPath(); mctx.arc(c + e.pos.x * s, c + e.pos.z * s, e.boss ? 5 : 2.2, 0, Math.PI * 2); mctx.fill();
-  }
-  const px = c + player.pos.x * s, py = c + player.pos.z * s;
-  const look = Math.atan2(-Math.cos(cam.yaw), -Math.sin(cam.yaw));
-  mctx.fillStyle = 'rgba(255,255,255,0.25)';
-  mctx.beginPath(); mctx.moveTo(px, py);
-  mctx.arc(px, py, 22, look - 0.5, look + 0.5); mctx.closePath(); mctx.fill();
-  mctx.save(); mctx.translate(px, py); mctx.rotate(-player.facing);
-  mctx.fillStyle = '#fff'; mctx.strokeStyle = '#1d1d2b'; mctx.lineWidth = 1.5;
-  mctx.beginPath(); mctx.moveTo(0, 6); mctx.lineTo(4, -4); mctx.lineTo(-4, -4); mctx.closePath(); mctx.fill(); mctx.stroke();
-  mctx.restore();
-}
-
-function showScreen(id) {
-  for (const s of ['menu', 'over', 'win']) $(s).hidden = s !== id;
-  $('hud').hidden = id !== null;
-  input.enabled = id === null;
-  if (id !== null) { input.releaseAll(); try { document.exitPointerLock?.(); } catch { /* rien */ } }
-}
+const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+const fmtKm = m => `${(m / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
 
 function start() {
-  audio.unlock();
-  resetGame();
-  game.state = 'play';
-  showScreen(null);
-  banner('Le Gardien des Cristaux', 'Trouve les 5 cristaux cachés sur l\'île');
+  audio.init();
+  reset();
+  game.state = 'fly';
+  show(null);
+  banner(`Largage à ${Math.round(START.alt).toLocaleString('fr-FR')} m`, 'Cherche les thermiques sous les cumulus : quand le vario bipe, spirale !', 5500);
 }
-$('btn-start').addEventListener('click', start);
-$('btn-retry').addEventListener('click', start);
-$('btn-again').addEventListener('click', start);
-$('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? '🔇' : '🔊'; e.currentTarget.blur(); });
 
-// --- Boucle principale ----------------------------------------------------------------
+function finish(kind, title, text) {
+  game.state = 'end';
+  $('end-kicker').textContent = { win: 'Circuit bouclé', field: 'Atterrissage en campagne', crash: 'Accident', home: 'Retour au terrain' }[kind];
+  $('end-title').textContent = title;
+  $('end-text').textContent = text;
+  $('end-time').textContent = fmtTime(game.time);
+  $('end-dist').textContent = fmtKm(game.distance);
+  $('end-alt').textContent = `${Math.round(game.maxAlt).toLocaleString('fr-FR')} m`;
+  $('end-climb').textContent = `+${game.bestClimb.toFixed(1)} m/s`;
+  $('end-tps').textContent = `${course.state.next} / ${TURNPOINTS.length}`;
+  $('end').dataset.kind = kind;
+  if (kind === 'crash') shake = 1;
+  setTimeout(() => { if (game.state === 'end') show('end'); }, kind === 'crash' ? 1200 : 400);
+}
+
+input.onKey = code => {
+  if (code === 'KeyC' && (game.state === 'fly' || game.state === 'ground')) {
+    game.camMode = game.camMode === 'chase' ? 'cockpit' : 'chase';
+  }
+  if ((code === 'KeyP' || code === 'Escape') && (game.state === 'fly' || game.state === 'paused')) {
+    game.state = game.state === 'paused' ? 'fly' : 'paused';
+    show(game.state === 'paused' ? 'pause' : null);
+  }
+  if (code === 'KeyT' && game.state === 'fly') game.warp = game.warp === 1 ? 3 : 1;
+  if (code === 'KeyM') $('btn-mute').textContent = audio.toggle() ? 'Son coupé' : 'Son';
+};
+$('btn-start').addEventListener('click', start);
+$('btn-again').addEventListener('click', start);
+$('btn-resume').addEventListener('click', () => input.onKey('KeyP'));
+$('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? 'Son coupé' : 'Son'; e.currentTarget.blur(); });
+
+// --- Contact avec le sol ------------------------------------------------------------------------
+function touchdown() {
+  const { x, z } = glider.pos;
+  const ground = heightAt(x, z);
+  const vs = glider.vario, bank = Math.abs(glider.bank), sp = glider.speed;
+  const { slope } = gradientAt(x, z, 10);
+  const onField = Math.abs(x - AIRFIELD.x) < AIRFIELD.halfWidth + 40 && Math.abs(z - AIRFIELD.z) < AIRFIELD.halfLength + 80;
+
+  if (ground < WATER_LEVEL) return finish('crash', 'Amerrissage', 'Le planeur s\'est posé dans le lac. Le pilote nage jusqu\'à la rive, trempé mais indemne.');
+  if (forestAt(x, z) > 0.35 && !onField) return finish('crash', 'Dans les arbres', 'Pas de champ dégagé : le planeur finit dans la forêt. Garde toujours un champ à portée de plané.');
+  if (sp > 40 || vs < -3.5 || bank > 0.4 || slope > 0.2 || glider.pitch < -0.25) {
+    return finish('crash', 'Atterrissage brutal', `Contact à ${Math.round(sp * 3.6)} km/h avec ${vs.toFixed(1)} m/s de vitesse verticale. Arrive moins vite, ailes à plat, et arrondis juste avant le sol.`);
+  }
+  // Posé : le planeur roule jusqu'à l'arrêt.
+  game.state = 'ground';
+  game.onField = onField;
+  audio.thud();
+  shake = 0.4;
+}
+
+function endRollout() {
+  if (game.onField && course.complete) finish('win', 'Circuit réalisé !', `Les ${TURNPOINTS.length} points de virage sont validés et tu t'es posé sur la piste.`);
+  else if (game.onField) finish('home', 'Posé au terrain', `Atterrissage réussi, mais il manque ${TURNPOINTS.length - course.state.next} point(s) de virage au circuit.`);
+  else finish('field', 'Aux vaches !', 'Atterrissage réussi dans un champ. L\'équipe va venir te chercher avec la remorque.');
+}
+
+// --- Simulation ----------------------------------------------------------------------------------
+function step(dt) {
+  air.advance(game.time);
+  const lift = air.sample(glider.pos.x, glider.pos.y, glider.pos.z);
+  const px = glider.pos.x, pz = glider.pos.z;
+  glider.update(dt, input, lift);
+  game.time += dt;
+  game.distance += Math.hypot(glider.pos.x - px, glider.pos.z - pz);
+  game.maxAlt = Math.max(game.maxAlt, glider.pos.y);
+
+  const tp = course.update(glider.pos);
+  if (tp) {
+    audio.chime();
+    banner(`${tp.name} validé`, course.complete ? 'Dernière étape : retour au terrain et atterrissage' : `Prochain point : ${course.target.name}`);
+  }
+
+  const ground = Math.max(heightAt(glider.pos.x, glider.pos.z), WATER_LEVEL);
+  if (glider.pos.y - 0.45 <= ground) { glider.pos.y = ground + 0.45; touchdown(); }
+}
+
+function rollout(dt) {
+  // Sur la roue, ailes à plat, le planeur freine jusqu'à l'arrêt.
+  glider.phi = damp(glider.phi, 0, 6, dt);
+  glider.theta = damp(glider.theta, 0, 6, dt);
+  glider.syncQuat();
+  glider.speed = Math.max(0, glider.speed - 4 * dt);
+  const dir = glider.forward.setY(0).normalize();
+  glider.pos.addScaledVector(dir, glider.speed * dt);
+  glider.pos.y = heightAt(glider.pos.x, glider.pos.z) + 0.45;
+  glider.vario = 0;
+  if (glider.speed <= 0.5) endRollout();
+}
+
+function warning(agl) {
+  if (game.state !== 'fly') return '';
+  if (glider.stalled) return 'Décrochage : rends la main';
+  if (glider.speed > V_NE) return 'Survitesse';
+  if (Math.hypot(glider.pos.x, glider.pos.z) > PLAY_RADIUS) return 'Hors zone : fais demi-tour';
+  if (agl < 150 && Math.hypot(glider.pos.x - AIRFIELD.x, glider.pos.z - AIRFIELD.z) > 1500) return 'Bas : choisis un champ';
+  return '';
+}
+
+// Cap et distance vers le prochain point (ou le terrain), et marge pour rentrer en plané.
+function navInfo() {
+  const target = course.target ?? { name: 'Terrain', x: AIRFIELD.x, z: AIRFIELD.z };
+  const dx = target.x - glider.pos.x, dz = target.z - glider.pos.z;
+  const home = Math.hypot(AIRFIELD.x - glider.pos.x, AIRFIELD.z - glider.pos.z);
+  const margin = glider.pos.y - (AIRFIELD.h + 150 + home / 25);   // finesse de sécurité 25
+  return {
+    navLabel: course.target ? `Point ${course.state.next + 1} / ${TURNPOINTS.length}` : 'Retour',
+    navName: target.name,
+    navDist: fmtKm(Math.hypot(dx, dz)),
+    navRel: Math.atan2(dx, -dz) - glider.heading,
+    glideText: `Marge retour terrain : ${margin >= 0 ? '+' : ''}${Math.round(margin)} m`,
+  };
+}
+
+// --- Boucle ------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
 let elapsed = 0;
 
 function tick() {
-  let dt = Math.min(clock.getDelta(), 0.05);
-  elapsed += dt;
-  input.poll();
+  const realDt = Math.min(clock.getDelta(), 0.05);
+  elapsed += realDt;
+  input.poll(realDt);
 
-  if (game.hitStop > 0) { game.hitStop -= dt; dt *= 0.1; }
-
-  if (game.state === 'play' || game.state === 'dead') {
-    player.update(dt, input, cam.yaw, world, game);
-    for (const e of [...game.enemies]) e.update(dt, player, world, game);
-
-    if (game.state === 'play') {
-      game.time += dt;
-
-      for (const c of crystals) {
-        if (c.taken) continue;
-        if (Math.hypot(player.pos.x - c.spot.x, player.pos.z - c.spot.z) < 2.5 && player.pos.y < c.spot.y + 2) collectCrystal(c);
-      }
-      for (let i = hearts.length - 1; i >= 0; i--) {
-        const h = hearts[i];
-        h.life -= dt;
-        if (player.pos.distanceTo(h.m.position) < 1.6 && player.hp < MAX_HP) {
-          player.heal(1); audio.heal();
-          effects.burst(h.m.position, { color: 0xff4d6d, count: 10, speed: 3, up: 4, glow: true });
-          scene.remove(h.m); hearts.splice(i, 1);
-        } else if (h.life <= 0) {
-          scene.remove(h.m); hearts.splice(i, 1);
-        }
-      }
-      // Quelques slimes reviennent pour que l'île ne reste pas vide.
-      game.respawnT += dt;
-      if (game.respawnT > 10 && !game.boss && game.enemies.length < 10) {
-        game.respawnT = 0;
-        const p = world.randomSpot(18, 52, 1);
-        if (p && Math.hypot(p.x - player.pos.x, p.z - player.pos.z) > 20) spawnSlime(p.x, p.z);
-      }
-      if (world.portal.active && Math.hypot(player.pos.x, player.pos.z) < 2.2) {
-        game.state = 'won';
-        audio.win();
-        $('win-time').textContent = formatTime(game.time);
-        $('win-kills').textContent = game.kills;
-        showScreen('win');
-      }
-      if (player.dead) {
-        game.state = 'dead';
-        audio.lose();
-        setTimeout(() => {
-          if (game.state !== 'dead') return;
-          $('over-crystals').textContent = `${game.collected} / ${crystals.length}`;
-          $('over-kills').textContent = game.kills;
-          showScreen('over');
-        }, 1600);
-      }
-    }
-    updateHud();
-    drawMinimap();
+  if (game.state === 'fly') {
+    const total = realDt * game.warp;
+    const n = Math.ceil(total / 0.02);
+    for (let i = 0; i < n && game.state === 'fly'; i++) step(total / n);
+    game.bestClimb = Math.max(game.bestClimb, glider.vario);
+    game.varioAvg = damp(game.varioAvg, glider.vario, 1 / 20, total);   // intégrateur ~20 s
+  } else if (game.state === 'ground') {
+    rollout(realDt);
+    game.time += realDt;
   } else if (game.state === 'menu') {
-    // Lent travelling autour de l'île derrière le menu.
-    cam.yaw += dt * 0.08;
+    // Démonstration derrière le menu : le planeur spirale tranquillement.
+    glider.update(realDt, { pitch: 0, roll: 0.3, brake: false }, 0);
+    glider.pos.y = START.alt;
   }
 
-  for (const c of crystals) {
-    if (c.taken) continue;
-    c.mesh.rotation.y += dt * 1.5;
-    c.mesh.position.y = c.spot.y + Math.sin(elapsed * 2 + c.spot.x) * 0.2;
+  const agl = glider.pos.y - Math.max(heightAt(glider.pos.x, glider.pos.z), WATER_LEVEL);
+  if (game.state !== 'menu') {
+    hud.update(glider, {
+      varioAvg: game.varioAvg, agl,
+      groundSpeed: Math.hypot(glider.forward.x * glider.speed + WIND.x, glider.forward.z * glider.speed + WIND.z),
+      timeText: fmtTime(game.time), warp: game.warp, course: course.state,
+      warning: warning(agl), ...navInfo(),
+    });
   }
-  for (const h of hearts) {
-    h.t += dt;
-    h.m.rotation.y += dt * 2.5;
-    h.m.position.y = h.base + Math.sin(h.t * 3) * 0.15;
-    h.m.visible = h.life > 4 || Math.floor(h.life * 6) % 2 === 0;
-  }
+  audio.update(glider.speed, glider.vario, game.state === 'fly', glider.stalled);
 
-  effects.update(dt);
-  updateCamera(dt);
-  world.update(elapsed, player.pos);
+  updateCamera(realDt);
+  sky.follow(glider.pos);
+  terrain.update(elapsed);
+  course.animate(elapsed);
+  if (game.state === 'menu') air.advance(0);
+  clouds.userData.update();
   renderer.render(scene, camera);
-  input.consume();
 }
 
-resetGame();
-showScreen('menu');
+reset();
+show('menu');
 renderer.setAnimationLoop(tick);
+$('loading').hidden = true;
 
-// Accès depuis la console du navigateur, pratique pour tester (ex. __jeu.player.hp = 99).
-window.__jeu = { game, player, world, crystals, collectCrystal, cam };
+// Accès depuis la console pour tester (ex. __jeu.glider.pos.y = 2500).
+window.__jeu = { game, glider, course, air, start, camera, banner, AIRFIELD, heightAt };
