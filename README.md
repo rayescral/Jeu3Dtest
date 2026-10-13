@@ -4,11 +4,11 @@ Jeu de gestion en 3D, à la première personne, dans l'esprit de *Supermarket Si
 
 Au départ, le club des Platanes a un seul court en terre battue, deux étagères vides et douze licenciés. Tu commandes le matériel sur l'ordinateur de l'accueil, tu ranges les cartons livrés dans la boutique, tu encaisses les joueurs au comptoir (carte ou espèces, avec la monnaie à rendre), tu brosses les terrains usés, puis tu investis : nouveaux courts en résine, terrains de padel, étagères, vestiaires, éclairage, personnel.
 
-## Lancer le jeu
+## Jouer
 
-**Double-clique sur `Tennis Club Simulator.html`.** C'est tout : le jeu entier (code, moteur 3D, styles) tient dans ce fichier, sans serveur ni installation. Il fonctionne même hors ligne (seule la police d'écriture vient d'internet).
+**En ligne (recommandé)** : mets le jeu sur Netlify en glisser-déposer, comme Justice Deck. Le pas-à-pas est dans `Tennis Club Simulator - Mettre en ligne.txt`.
 
-Pour les développeurs : le code source est dans `src/`. Après une modification, régénère le fichier avec `npm run build`. Pour travailler sur les sources directement, lance un serveur local dans le dossier (`npm start`, puis http://localhost:8000).
+**Sur ton ordinateur, pour développer** : lance un petit serveur dans le dossier (`npm start`, ou `python -m http.server 8000`), puis ouvre http://localhost:8000. Ouvrir `index.html` d'un double-clic ne marche pas : le navigateur bloque les modules JavaScript chargés depuis le disque.
 
 ## Commandes
 

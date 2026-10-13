@@ -4,7 +4,6 @@
   "description": "Jeu de gestion de club de tennis et de padel en 3D, à la première personne.",
   "scripts": {
     "start": "python3 -m http.server 8000",
-    "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs",
-    "build": "node tools/build-standalone.mjs"
+    "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs"
   }
 }
