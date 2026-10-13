@@ -25,8 +25,10 @@
     <div class="hud-right">
       <div class="clock"><span id="hud-day">Jour 1</span><b id="hud-clock">08:00</b></div>
       <span class="status prep" id="hud-status">Préparation</span>
+      <span class="event-chip" id="hud-event" hidden></span>
+      <div id="challenge" hidden></div>
+  <div id="prep">L'horloge est arrêtée : prépare le club, puis retourne la pancarte de l'entrée sur <b>OUVERT</b> pour lancer la journée.</div>
     </div>
-    <div id="prep">L'horloge est arrêtée : prépare le club, puis retourne la pancarte de l'entrée sur <b>OUVERT</b> pour lancer la journée.</div>
 
     <div id="crosshair"></div>
     <div id="hint" hidden></div>
@@ -61,7 +63,7 @@
       <dl class="controls">
         <dt>Z Q S D</dt><dd>Se déplacer (W A S D en QWERTY)</dd>
         <dt>Souris</dt><dd>Regarder</dd>
-        <dt>E</dt><dd>Prendre un carton, ouvrir l'ordinateur, la pancarte · maintenir pour brosser un terrain</dd>
+        <dt>E</dt><dd>Prendre un carton, ouvrir l'ordinateur, la pancarte, servir à la buvette ou au snack, faire sortir des joueurs en retard · maintenir pour brosser un terrain</dd>
         <dt>Clic gauche</dt><dd>Ranger un article, scanner, encaisser</dd>
         <dt>Clic droit</dt><dd>Reprendre un article dans le carton</dd>
         <dt>G</dt><dd>Poser le carton</dd>
@@ -77,8 +79,8 @@
     <div class="menu-card">
       <p class="kicker">Simulation de gestion</p>
       <h1>Tennis Club<br><span>Simulator</span></h1>
-      <p class="lede">Reprends le petit club des Platanes : un seul court en terre battue, deux étagères vides et douze licenciés.
-        Commande le matériel, remplis la boutique, encaisse les joueurs, entretiens les terrains, et fais grandir le club jusqu'au padel.</p>
+      <p class="lede">Reprends le petit club des Platanes : un seul court en terre battue, deux étagères vides et quatre licenciés.
+        Remplis la boutique, encaisse les clients, construis une buvette et un snack, fais payer le parking, chasse les joueurs qui débordent de leur créneau, et fais grandir le club jusqu'au padel.</p>
       <div class="stack">
         <button class="primary" id="btn-new">Nouvelle partie</button>
         <button class="ghost" id="btn-continue" hidden>Continuer</button>

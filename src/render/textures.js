@@ -250,6 +250,9 @@ export const productLabel = (product) => memo('lbl-' + product, () => canvasText
   const palettes = {
     balls: ['#1d3f8f', '#e8f04a', 'ACE'], padelballs: ['#0f7a54', '#c8f04a', 'PADEL'],
     water: ['#dff1fb', '#2a7cc0', 'SOURCE'], iso: ['#ff8a3d', '#ffffff', 'BOOST'],
+    energy: ['#b5651d', '#ffe9a8', 'POWER'], shoes: ['#ffffff', '#f26b3a', 'COURTLINE'],
+    beer: ['#f2e6c4', '#7a1f1f', 'BLONDE'], soda: ['#d62d2d', '#ffffff', 'FIZZ'], coffee: ['#f4efe6', '#6b4226', 'CAFÉ'],
+    juice: ['#ffa31a', '#ffffff', 'ORANGE'],
   };
   const [bg, fg, brand] = palettes[product] || ['#ffffff', P.color, P.short];
   g.fillStyle = bg; g.fillRect(0, 0, w, h);

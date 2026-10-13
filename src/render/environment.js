@@ -126,15 +126,24 @@ export function createEnvironment(scene, renderer) {
       scene.add(l);
     }
   }
-  // Voitures garées (formes lisses simples).
-  const carColors = [0xd0d4d9, 0x1d2a3a, 0x8a1c1c, 0xf2f2f2, 0x2f5d9e, 0x3a3f45];
-  // Obstacles extérieurs pour le joueur (voitures, haies, troncs, poteaux).
+  // Les voitures (garées ou en mouvement) sont gérées par traffic.js.
+  // Obstacles extérieurs pour le joueur (haies, troncs, poteaux).
   const colliders = [];
   const block = (x, z, hx, hz) => colliders.push({ minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz });
-  [[-15.6, 26.2], [-10.4, 35.8], [7.8, 26.2], [13, 26.2], [-5.2, 26.2], [18.2, 35.8]].forEach(([x, z], i) => {
-    scene.add(car(x, z, carColors[i % carColors.length], z > 30 ? Math.PI : 0));
-    block(x, z, 1.0, 2.35);
-  });
+  // Route d'accès au parking, de part et d'autre.
+  for (const [x0, x1] of [[-90, -22], [22, 90]]) {
+    const t = asphaltTexture().clone(); t.needsUpdate = true;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set((x1 - x0) / 8, 1);
+    const road = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0, 5), new THREE.MeshStandardMaterial({ map: t, roughness: 0.92 }));
+    road.rotation.x = -Math.PI / 2; road.position.set((x0 + x1) / 2, 0.012, 31);
+    road.receiveShadow = true;
+    scene.add(road);
+    for (let x = x0 + 2; x < x1 - 2; x += 6) {
+      const dash = new THREE.Mesh(new THREE.PlaneGeometry(3, 0.14), lineMat);
+      dash.rotation.x = -Math.PI / 2; dash.position.set(x + 1.5, 0.02, 31);
+      scene.add(dash);
+    }
+  }
 
   // --- Arbres et haies -------------------------------------------------------------------------
   const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 3.2, 10).translate(0, 1.6, 0);
@@ -145,6 +154,8 @@ export function createEnvironment(scene, renderer) {
   const spots = [];
   const blocked = (x, z) => {
     if (x > -14 && x < 14 && z > -4 && z < 39) return true;               // club-house, parvis, parking
+    if (x > -25 && x < 25 && z > -4 && z < 39) return true;               // buvette, snack, terrasses, parking
+    if (Math.abs(z - 31) < 4.5) return true;                              // route d'accès
     for (const s of Object.values(COURT_SLOTS)) if (Math.abs(x - s.cx) < 14 && z < s.cz + 22 && z > s.cz - 22) return true;
     if (Math.abs(x) < 3 && z < 0) return true;
     return false;
@@ -243,6 +254,7 @@ export function createEnvironment(scene, renderer) {
 }
 
 // Voiture : silhouette latérale extrudée aux arêtes arrondies, vitres teintées, roues.
+// (exportée pour les voitures animées du parking)
 function carShape(points) {
   const sh = new THREE.Shape();
   points.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y)));
@@ -251,7 +263,7 @@ function carShape(points) {
 const CAR_BODY = carShape([[-2.15, 0.3], [2.1, 0.3], [2.2, 0.55], [2.15, 0.85], [1.2, 0.98], [0.6, 1.42], [-1.0, 1.45], [-1.9, 1.05], [-2.2, 0.95], [-2.25, 0.5]]);
 const CAR_GLASS = carShape([[1.05, 1.0], [0.52, 1.36], [-0.95, 1.38], [-1.72, 1.04]]);
 let carGeo = null, glassGeo = null;
-function car(x, z, color, rot) {
+export function car(x, z, color, rot) {
   carGeo ??= new THREE.ExtrudeGeometry(CAR_BODY, { depth: 1.6, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 5, curveSegments: 8 }).translate(0, 0, -0.8);
   glassGeo ??= new THREE.ExtrudeGeometry(CAR_GLASS, { depth: 1.66, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 3 }).translate(0, 0, -0.83);
   const g = new THREE.Group();

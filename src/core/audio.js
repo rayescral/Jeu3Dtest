@@ -62,6 +62,10 @@ export function createAudio() {
       noise(0.05, { vol: v, freq: 1100, q: 2 });
       tone(420, 0.07, { vol: v * 0.4, slide: 260 });
     },
+    // Coup de sifflet (agent de sécurité, joueurs priés de sortir).
+    whistle: () => { tone(2900, 0.18, { type: 'square', vol: 0.04, slide: 3100 }); tone(2900, 0.32, { type: 'square', vol: 0.04, delay: 0.22, slide: 2700 }); },
+    // Bière tirée au comptoir, puis tiroir-caisse.
+    pour: () => { noise(0.6, { vol: 0.12, freq: 900, q: 0.6, type: 'lowpass' }); noise(0.12, { vol: 0.2, freq: 3000, delay: 0.55 }); tone(2400, 0.35, { vol: 0.06, delay: 0.6 }); },
     step: () => noise(0.06, { vol: 0.035, freq: 500, q: 0.8 }),
     bird() {
       const base = 2400 + Math.random() * 1600;

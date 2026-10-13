@@ -31,14 +31,60 @@ export const LOBBY_BENCH = { x: 3.4, z: 13.5, w: 3.6, d: 0.42 };
 
 // Étagères de la boutique : 4 contre le mur de droite, 2 contre le mur du fond.
 // facing : direction vers laquelle l'étagère est tournée (angle autour de y, 0 = vers +z).
-export const SHELF_SLOTS = [
+const SHOP_SHELVES = [
   { x: 9.45, z: 3.1, facing: -Math.PI / 2 },
   { x: 9.45, z: 5.6, facing: -Math.PI / 2 },
   { x: 9.45, z: 8.1, facing: -Math.PI / 2 },
   { x: 9.45, z: 10.6, facing: -Math.PI / 2 },
   { x: 4.3, z: 0.45, facing: 0 },
   { x: 6.9, z: 0.45, facing: 0 },
-].map((s, i) => ({ ...s, id: i, w: 2.1, d: 0.6, browse: { x: s.x + Math.sin(s.facing) * 1.25, z: s.z + Math.cos(s.facing) * 1.25 } }));
+].map(s => ({ ...s, zone: 'shop' }));
+
+// --- Buvette (à l'ouest du club-house) et snack (à l'est) -------------------------------------------
+// Petits bâtiments : comptoir de service côté nord (vers le parvis), porte de service à l'est (buvette)
+// ou à l'ouest (snack), étagère réfrigérée au fond, terrasse avec tables devant.
+function stand(side, zone) {
+  const m = x => x * side;                    // side = -1 : buvette (ouest), +1 : snack (est)
+  const x0 = Math.min(m(13), m(20)), x1 = Math.max(m(13), m(20));
+  const cx = m(16.5);
+  const tables = [[m(19.2), 10.4], [m(19.2), 12.8], [m(13.8), 10.4], [m(13.8), 12.8]].map(([x, z]) => ({ x, z }));
+  const seats = [];
+  for (const t of tables) {
+    const inner = t.x + (cx > t.x ? 0.9 : -0.9);
+    seats.push({ x: inner, z: t.z, look: t }, { x: t.x, z: t.z + 0.85, look: t }, { x: t.x, z: t.z - 0.85, look: t });
+  }
+  return {
+    side, zone, x0, x1, z0: 3, z1: 8.2, cx,
+    counter: { minX: x0, maxX: x1, minZ: 7.8, maxZ: 8.6, top: 1.05 },
+    door: { x: side < 0 ? x1 : x0, z0: 4.6, z1: 5.8 },     // porte de service, côté club-house
+    staff: { x: cx, z: 7.0 },
+    queue: [0, 1, 2, 3, 4].map(i => ({ x: cx, z: 9.3 + i * 0.9 })),
+    approach: { x: m(12), z: 15.4 },
+    entry: { x: cx, z: 13.9 },
+    tables, seats,
+    shelves: [m(18.2), m(14.8)].map(x => ({ x, z: 3.45, facing: 0, zone })),
+  };
+}
+export const STANDS = { buvette: stand(-1, 'bar'), snack: stand(1, 'snack') };
+
+export const SHELF_SLOTS = [...SHOP_SHELVES, ...STANDS.buvette.shelves.map(s => ({ ...s, stand: 'buvette' })), ...STANDS.snack.shelves.map(s => ({ ...s, stand: 'snack' }))]
+  .map((s, i) => ({ ...s, id: i, w: 2.1, d: 0.6, browse: { x: s.x + Math.sin(s.facing) * 1.25, z: s.z + Math.cos(s.facing) * 1.25 } }));
+
+// --- Parking : 2 rangées de places, une allée centrale (z = 31), entrée à l'ouest par une barrière.
+export const PARKING_LANE_Z = 31;
+export const PARKING_ROAD = { inX: -60, outX: 70, barrierX: -23 };
+export const PARKING_SPOTS = [];
+for (const z of [26.2, 35.8]) {
+  for (const x of [-18.7, -16.1, -13.5, -10.9, -8.3, -5.7, 4.7, 7.3, 9.9, 12.5, 15.1, 17.7]) PARKING_SPOTS.push({ x, z, row: z < 31 ? 1 : -1 });
+}
+// Deux places occupées en permanence (voitures du personnel).
+export const RESERVED_SPOTS = [0, 23];
+export const PAY_MACHINE = { x: -24.8, z: 28.0 };
+// Porte d'une voiture garée : on en descend dans l'espace entre deux places.
+export const carDoor = spot => ({ x: spot.x + 1.3, z: spot.z });
+
+// Poste de l'agent de sécurité, sur le parvis.
+export const SECURITY_POST = { x: 3.2, z: 16.2 };
 
 // Courts. cx, cz : centre ; route : chemin depuis la porte arrière jusqu'au portillon.
 export const TENNIS_AREA = { w: 18.3, l: 36.6 };
@@ -101,6 +147,26 @@ export function staticColliders() {
   return out;
 }
 
+// Murs, comptoir et tables d'une buvette ou d'un snack construit ; chantier : une seule emprise.
+export function standColliders(key, built) {
+  const S = STANDS[key], t = 0.25, out = [];
+  if (!built) return [{ minX: S.x0 - 0.5, maxX: S.x1 + 0.5, minZ: S.z0 - 0.5, maxZ: S.z1 + 0.5 }];
+  out.push({ minX: S.x0, maxX: S.x1, minZ: S.z0 - t / 2, maxZ: S.z0 + t / 2 });               // fond
+  const outer = S.side < 0 ? S.x0 : S.x1;
+  out.push({ minX: outer - t / 2, maxX: outer + t / 2, minZ: S.z0, maxZ: S.z1 });              // côté extérieur
+  const d = S.door.x;
+  out.push({ minX: d - t / 2, maxX: d + t / 2, minZ: S.z0, maxZ: S.door.z0 });                 // côté porte
+  out.push({ minX: d - t / 2, maxX: d + t / 2, minZ: S.door.z1, maxZ: S.z1 });
+  out.push({ minX: S.x0, maxX: S.x1, minZ: S.counter.minZ, maxZ: S.counter.maxZ });           // comptoir
+  for (const tb of S.tables) out.push({ minX: tb.x - 0.5, maxX: tb.x + 0.5, minZ: tb.z - 0.5, maxZ: tb.z + 0.5 });
+  return out;
+}
+
+export function parkingColliders(paid) {
+  return paid ? [{ minX: PAY_MACHINE.x - 0.3, maxX: PAY_MACHINE.x + 0.3, minZ: PAY_MACHINE.z - 0.25, maxZ: PAY_MACHINE.z + 0.25 }] : [];
+}
+export const carCollider = spot => ({ minX: spot.x - 0.95, maxX: spot.x + 0.95, minZ: spot.z - 2.3, maxZ: spot.z + 2.3 });
+
 export function shelfCollider(slot) {
   const horiz = Math.abs(Math.sin(slot.facing)) < 0.5;   // tournée vers ±z → longue selon x
   const hw = (horiz ? slot.w : slot.d) / 2, hd = (horiz ? slot.d : slot.w) / 2;
@@ -145,4 +211,51 @@ function poles(s, dx, dz) {
     out.push({ minX: x - 0.15, maxX: x + 0.15, minZ: z - 0.15, maxZ: z + 0.15 });
   }
   return out;
+}
+
+// Trajet d'une voiture : de la route à sa place (arrivée), ou de sa place à la sortie (départ, en marche
+// arrière pour s'extraire). Segments droits ou courbes (a → b, point de contrôle c), vitesse v en m/s.
+// La simulation et le rendu utilisent les mêmes trajets, donc la même durée.
+export function carRoute(spot, leaving) {
+  const laneIn = PARKING_LANE_Z - 0.8, laneOut = PARKING_LANE_Z + 0.8, R = PARKING_ROAD;
+  if (!leaving) {
+    const turn = Math.max(spot.x - 5, R.barrierX + 1.5);
+    return [
+      { a: { x: R.inX, z: laneIn }, b: { x: R.barrierX - 6, z: laneIn }, v: 11 },
+      { a: { x: R.barrierX - 6, z: laneIn }, b: { x: turn, z: laneIn }, v: 6.5 },
+      { a: { x: turn, z: laneIn }, c: { x: spot.x, z: laneIn }, b: { x: spot.x, z: spot.z }, v: 3 },
+    ];
+  }
+  return [
+    { a: { x: spot.x, z: spot.z }, c: { x: spot.x, z: laneOut }, b: { x: spot.x - 4, z: laneOut }, v: 2, reverse: true },
+    { a: { x: spot.x - 4, z: laneOut }, b: { x: 26, z: laneOut }, v: 7.5 },
+    { a: { x: 26, z: laneOut }, b: { x: R.outX, z: laneOut }, v: 11 },
+  ];
+}
+function segPoint(s, u) {
+  if (!s.c) return { x: s.a.x + (s.b.x - s.a.x) * u, z: s.a.z + (s.b.z - s.a.z) * u };
+  const k = 1 - u;
+  return { x: k * k * s.a.x + 2 * k * u * s.c.x + u * u * s.b.x, z: k * k * s.a.z + 2 * k * u * s.c.z + u * u * s.b.z };
+}
+function segLength(s) {
+  if (!s.c) return Math.hypot(s.b.x - s.a.x, s.b.z - s.a.z);
+  let len = 0, p = s.a;
+  for (let i = 1; i <= 16; i++) { const q = segPoint(s, i / 16); len += Math.hypot(q.x - p.x, q.z - p.z); p = q; }
+  return len;
+}
+export const routeDuration = segs => segs.reduce((a, s) => a + segLength(s) / s.v, 0);
+// Position et cap d'une voiture à l'instant t (en secondes) sur son trajet.
+export function routePose(segs, t) {
+  for (const s of segs) {
+    const d = segLength(s) / s.v;
+    if (t <= d || s === segs[segs.length - 1]) {
+      const u = Math.min(1, Math.max(0, t / d));
+      const p = segPoint(s, u), q = segPoint(s, Math.min(1, u + 0.01)), o = segPoint(s, Math.max(0, u - 0.01));
+      let heading = Math.atan2(q.x - o.x, q.z - o.z);
+      if (s.reverse) heading += Math.PI;
+      return { x: p.x, z: p.z, heading };
+    }
+    t -= d;
+  }
+  return null;
 }

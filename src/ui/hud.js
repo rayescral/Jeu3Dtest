@@ -1,7 +1,8 @@
 // Affichage permanent : argent, niveau, licenciés, satisfaction, heure ; viseur et aides contextuelles ;
 // notifications ; panneau de caisse ; objectifs de prise en main.
 import { fmtMoney, fmtClock } from '../core/util.js';
-import { PRODUCTS } from '../game/data.js';
+import { PRODUCTS, EVENTS } from '../game/data.js';
+import { challengeText, CHALLENGE_STAT } from '../game/club.js';
 import { ICON } from './icons.js';
 
 const $ = id => document.getElementById(id);
@@ -45,6 +46,23 @@ export function createHud() {
         st.textContent = s.open ? 'Ouvert' : s.dayStarted ? 'Fermé' : 'Préparation';
         st.className = 'status ' + (s.open ? 'open' : s.dayStarted ? 'closed' : 'prep');
         $('prep').hidden = !!s.dayStarted;
+        const ev = EVENTS[s.event?.id];
+        const evEl = $('hud-event');
+        evEl.hidden = !ev || s.event.id === 'calm';
+        if (ev) { evEl.textContent = ev.name; evEl.title = ev.desc; }
+      }
+      // Avancement du défi du jour.
+      const ch = s.challenge;
+      if (ch) {
+        const n = Math.min(ch.target, s.stats[CHALLENGE_STAT[ch.id]] ?? 0);
+        const ck = `${ch.id}|${n}|${ch.done}`;
+        if (ck !== this.lastCh) {
+          this.lastCh = ck;
+          const el = $('challenge');
+          el.hidden = false;
+          el.classList.toggle('done', !!ch.done);
+          el.innerHTML = `<span>Défi du jour</span><b>${challengeText(ch)}</b><div class="bar"><i style="width:${(n / ch.target * 100).toFixed(0)}%"></i></div><small>${ch.done ? 'Réussi !' : `${n} / ${ch.target} · récompense ${ch.reward} €`}</small>`;
+        }
       }
       // Aide contextuelle sous le viseur.
       // On ne touche au DOM que si quelque chose a changé (sinon le navigateur recalcule la page à chaque image).
@@ -79,6 +97,8 @@ export function createHud() {
       else step = `Espèces : le client donne ${fmtMoney(counter.given)}. Clique sur le tiroir-caisse pour rendre la monnaie`;
       panel.innerHTML = `<header><span>Client au comptoir</span><b>${fmtMoney(counter.total)}</b></header><ul>${lines}</ul><p>${step}</p>`;
     },
+
+    challenge() { this.lastCh = null; },
 
     notify(text, kind = 'info') {
       const el = document.createElement('div');

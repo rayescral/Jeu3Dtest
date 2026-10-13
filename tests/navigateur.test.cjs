@@ -85,6 +85,50 @@ log('après Reprendre', await p.evaluate(() => ({ capturée: __club.input.locked
 if (!(await p.evaluate(() => __club.input.locked))) { await p.mouse.click(640, 360); await frames(3); await p.waitForTimeout(500); }
 log('après un clic dans le jeu', await p.evaluate(() => ({ capturée: __club.input.locked, modeGlisser: __club.input.fallback, message: !document.getElementById('look-help').hidden })));
 
+// Buvette : construction (chantier accéléré), commande servie au comptoir avec E.
+await p.evaluate(() => {
+  const c = __club.club; c.s.money = 20000; c.s.xp = 200; c.addXp(1);
+  c.buyFacility('buvette');
+  for (let t = 0; t < 70; t += 0.05) c.update(0.05, { playerAtCounter: true });
+});
+log('buvette construite', await p.evaluate(() => __club.club.s.facilities.buvette.built));
+// Une bière dans la boutique du club-house : refusée (elle se range à la buvette).
+const zone = await p.evaluate(() => { const c = __club.club; const box = { id: 999, product: 'beer', qty: 24 }; return c.placeItem(box, 0, 2); });
+log('bière dans la boutique', zone);
+await p.evaluate(() => {
+  const c = __club.club;
+  const i = __club.club.s.shelves.findIndex((sh, k) => sh.built && k >= 6);
+  c.s.shelves[i].levels[0] = { product: 'beer', qty: 12 };
+  c.s.shelves[i].levels[1] = { product: 'soda', qty: 12 };
+  c.s.shelves[i].levels[2] = { product: 'coffee', qty: 12 };
+  const cu = c.spawnCustomer('drink');
+  for (let t = 0; t < 120 && !c.standOrder('buvette'); t += 0.05) c.update(0.05, { playerAtCounter: true, playerAtStand: 'buvette' });
+});
+await look(-16.5, 6.6, -16.5, 1.1, 8.2);
+log('vise', await target());
+const bar0 = await p.evaluate(() => __club.club.s.stats.bar);
+await p.keyboard.press('KeyE'); await frames(2);
+log('servi à la buvette (touche E)', [await p.evaluate(() => __club.club.s.stats.bar) - bar0 > 0, await p.evaluate(() => !__club.club.standOrder('buvette'))]);
+
+// Joueurs qui dépassent leur créneau : on vise le court et on les fait sortir avec E.
+await p.evaluate(() => {
+  const c = __club.club;
+  for (const k of [...c.customers]) c.removeCustomer(k);
+  c.cancelCheckout(); c.queue.length = 0;
+  const cu = c.spawnCustomer('book');
+  cu.wants = [];
+  for (let t = 0; t < 400 && cu.state !== 'playing'; t += 0.05) { c.update(0.05, { playerAtCounter: true }); if (c.counter.cust === cu) { for (const it of c.counter.items) c.scan(it.uid); if (c.counter.method === 'card') c.payCard(c.counter.total); else c.payCash(Math.round((c.counter.given - c.counter.total) * 10) / 10); } }
+  if (cu.state !== 'playing') return console.log('client pas sur le court : ' + cu.state);
+  cu.overtimeDone = false;
+  const real = Math.random; Math.random = () => 0; c.endSession(cu); Math.random = real;
+});
+log('créneau dépassé', await p.evaluate(() => __club.club.court.T1.overtime));
+await look(-11, -3.2, -11, 0, -6);
+log('aide affichée', await p.evaluate(() => __club.ui.hint));
+log('vise', await target());
+for (let i = 0; i < 6 && await p.evaluate(() => __club.club.court.T1.overtime); i++) { await p.keyboard.press('KeyE'); await frames(2); await p.waitForTimeout(100); await p.evaluate(() => { for (const c of __club.club.customers) c.refuseT = 0; }); }
+log('terrain libéré', await p.evaluate(() => !__club.club.court.T1.overtime));
+
 console.log('erreurs :', errs.length ? errs : 'aucune');
 await b.close();
 })();

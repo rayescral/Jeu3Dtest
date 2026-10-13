@@ -1,9 +1,14 @@
 // Tennis Club Simulator : point d'entrée. Relie la simulation (game/), le rendu (render/),
 // le joueur (core/) et l'interface (ui/).
 import * as THREE from 'three';
-import { Club, createState } from './game/club.js';
-import { PRODUCTS, COURTS, COURT_TYPES } from './game/data.js';
-import { staticColliders, shelfCollider, courtColliders, SHELF_SLOTS, WORLD, LAPTOP } from './game/layout.js';
+import { Club, createState, SAVE_VERSION } from './game/club.js';
+import { PRODUCTS, COURTS, COURT_TYPES, EVENTS } from './game/data.js';
+import {
+  staticColliders, shelfCollider, courtColliders, SHELF_SLOTS, WORLD, LAPTOP, COURT_SLOTS,
+  STANDS, standColliders, parkingColliders, carCollider, PARKING_SPOTS, RESERVED_SPOTS,
+} from './game/layout.js';
+import { createStands } from './render/stands.js';
+import { createTraffic } from './render/traffic.js';
 import { createEnvironment } from './render/environment.js';
 import { createBuilding } from './render/building.js';
 import { createShelves } from './render/shelves.js';
@@ -68,7 +73,8 @@ const player = new Player(camera);
 player.yaw = 0;
 
 // --- État de la partie (créé au lancement) --------------------------------------------------------------
-let club = null, shelves = null, courts = null, computer = null, payment = null;
+let club = null, shelves = null, courts = null, computer = null, payment = null, stands = null;
+const traffic = createTraffic(scene);
 let colliders = staticColliders();
 const personViews = new Map();
 const boxViews = new Map();
@@ -85,7 +91,7 @@ function load() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    if (!s || s.version !== 1) return null;
+    if (!s || !(s.version >= 1 && s.version <= SAVE_VERSION)) return null;
     // Sauvegarde d'une version précédente, faite en pleine journée : l'horloge tournait déjà.
     s.dayStarted ??= s.minute > 8 * 60 + 1;
     return s;
@@ -96,6 +102,13 @@ function rebuildColliders() {
   colliders = [...staticColliders(), ...env.colliders];
   club.s.shelves.forEach((sh, i) => { if (sh.built) colliders.push(shelfCollider(SHELF_SLOTS[i])); });
   for (const c of COURTS) if (club.s.courts[c.id].built) colliders.push(...courtColliders(c.id, COURT_TYPES[c.surface].sport));
+  for (const k of Object.keys(STANDS)) {
+    const f = club.s.facilities[k];
+    if (f.built || f.building) colliders.push(...standColliders(k, f.built));
+  }
+  colliders.push(...parkingColliders(club.s.facilities.parking.built));
+  for (const i of RESERVED_SPOTS) colliders.push(carCollider(PARKING_SPOTS[i]));
+  for (const car of club.cars) if (car.state === 'parked') colliders.push(carCollider(PARKING_SPOTS[car.spot]));
 }
 
 function addBoxView(box) {
@@ -123,6 +136,7 @@ function completeObjective(id) {
   hud.objectives(club.s.objectives);
 }
 
+const progressSteps = {};
 const hooks = {
   spawnPerson(p) {
     const v = createPersonView(p);
@@ -136,7 +150,7 @@ const hooks = {
   },
   bubble(p, text, kind) { personViews.get(p.id)?.say(text, kind); },
   shelfChanged(i) { shelves?.refresh(i); },
-  shelfBuilt(i) { shelves?.refresh(i); rebuildColliders(); hud.notify('Nouvelle étagère installée', 'good'); },
+  shelfBuilt(i, quiet) { shelves?.refresh(i); rebuildColliders(); if (!quiet) hud.notify('Nouvelle étagère installée', 'good'); },
   counterChanged(c) { building.showCounter(c); hud.checkout(c); },
   boxAdded(box) { addBoxView(box); },
   boxRemoved(box) { removeBoxView(box); },
@@ -159,16 +173,30 @@ const hooks = {
     audio.level();
     showLevelUp(level, unlocks);
     courts?.refreshAll();
+    stands?.refreshAll();
   },
+  facilityChanged(key, done) { stands?.refresh(key); rebuildColliders(); if (done) { audio.level(); stands?.refreshMenus(); } else audio.build(); },
+  facilityProgress(key, p) {
+    const step = Math.floor(p * 50);
+    if (step !== progressSteps[key]) { progressSteps[key] = step; stands?.refresh(key); }
+  },
+  carArrive(car) { traffic.arrive(car); },
+  carParked(car) { traffic.parked(car); rebuildColliders(); if (club.s.facilities.parking.built) audio.coin(); },
+  carLeave(car) { traffic.leave(car); rebuildColliders(); },
+  carRemoved(car) { traffic.remove(car); },
+  standChanged() {},
+  standServed() { audio.pour(); },
+  challengeChanged() { hud.challenge(club); },
   dayEnded(summary) { showSummary(summary); },
   openChanged(open) { building.setOpen(open); },
-  pricesChanged() { shelves?.invalidate(); },
+  pricesChanged() { shelves?.invalidate(); stands?.refreshMenus(); },
   upgradeBought(k) { hud.notify('Aménagement installé', 'good'); },
 };
 
 function startGame(state) {
   club = new Club(state, hooks);
   shelves = createShelves(scene, interactables, club.s);
+  stands = createStands(scene, interactables, club.s);
   courts = createCourts(scene, club.s, interactables, pos => audio.ball(pos.distanceTo(camera.position)));
   for (const b of club.s.boxes) { b.held = false; addBoxView(b); }
   club.syncStaff();
@@ -191,6 +219,18 @@ function startGame(state) {
   audio.init();
   input.requestLock();
   hud.notify(`Jour ${club.s.day} : le club ouvre à 8 h. Retourne la pancarte quand tu es prêt.`, 'info');
+  announceDay();
+}
+
+// Événement et défi du jour.
+function announceDay() {
+  hud.challenge(club);
+  const ev = club.s.event;
+  if (ev && ev.id !== 'calm') {
+    const E = EVENTS[ev.id];
+    const extra = ev.id === 'promo' && ev.product ? ` Aujourd'hui : ${PRODUCTS[ev.product].name}.` : '';
+    setTimeout(() => hud.notify(`${E.name} : ${E.desc}${extra}`, 'info'), 900);
+  }
 }
 
 // --- Interfaces superposées ----------------------------------------------------------------------------
@@ -238,14 +278,17 @@ function showSummary(s) {
   input.exitLock();
   computer?.close();
   if (payment?.isOpen) payment.close();
-  const income = s.courts + s.shop + s.licenceFees;
+  const income = s.courts + s.shop + s.licenceFees + s.bar + s.snack + s.parking + s.tips + s.bonus;
   const expenses = s.orders + s.build + s.salaries + s.upkeep;
+  const line = (label, v) => (v ? `<dt>${label}</dt><dd>${fmtMoney(v)}</dd>` : '');
+  const ev = EVENTS[s.event] ?? EVENTS.calm;
   const drift = s.licenceDrift;
   $('summary').innerHTML = `<div class="sheet">
     <p class="kicker">Fin de journée</p><h2>Bilan du jour ${s.day}</h2>
     <div class="sum-grid">
       <section><h3>Recettes</h3>
-        <dl><dt>Locations de terrains</dt><dd>${fmtMoney(s.courts)}</dd><dt>Boutique</dt><dd>${fmtMoney(s.shop)}</dd><dt>Licences</dt><dd>${fmtMoney(s.licenceFees)}</dd></dl>
+        <dl><dt>Locations de terrains</dt><dd>${fmtMoney(s.courts)}</dd><dt>Boutique</dt><dd>${fmtMoney(s.shop)}</dd><dt>Licences</dt><dd>${fmtMoney(s.licenceFees)}</dd>
+          ${line('Buvette', s.bar)}${line('Snack', s.snack)}${line('Parking', s.parking)}${line('Pourboires', s.tips)}${line('Primes et défis', s.bonus)}</dl>
         <p class="total">${fmtMoney(income)}</p></section>
       <section><h3>Dépenses</h3>
         <dl><dt>Commandes</dt><dd>${fmtMoney(s.orders)}</dd><dt>Travaux</dt><dd>${fmtMoney(s.build)}</dd><dt>Salaires</dt><dd>${fmtMoney(s.salaries)}</dd><dt>Entretien et charges</dt><dd>${fmtMoney(s.upkeep)}</dd></dl>
@@ -257,6 +300,7 @@ function showSummary(s) {
       <div><span>Licenciés</span><b>${s.licences}</b><small>${s.newLicences} nouvelles licences${drift ? ` · ${drift > 0 ? '+' : ''}${drift} bouche-à-oreille` : ''}</small></div>
       <div><span>Satisfaction</span><b>${(s.satisfaction * 5).toFixed(1)} / 5</b></div>
     </div>
+    <p class="sum-extra">${ev.name}${s.challenge ? ` · Défi « ${s.challenge.text} » : ${s.challenge.done ? '<b class="pos">réussi</b>' : '<b class="neg">raté</b>'}` : ''}${s.evictions ? ` · ${s.evictions} groupe${s.evictions > 1 ? 's' : ''} sorti${s.evictions > 1 ? 's' : ''} du terrain` : ''}</p>
     <button class="primary" id="btn-next-day">Jour suivant</button>
     <p class="muted small" id="sum-save"></p>
   </div>`;
@@ -271,11 +315,17 @@ function showSummary(s) {
     input.uiOpen = false;
     input.requestLock();
     save();
+    rebuildColliders();
     hud.notify(`Jour ${club.s.day} : bonne journée !`, 'info');
+    announceDay();
   });
 }
 
 // --- Commandes du joueur ------------------------------------------------------------------------------
+function atStand() {
+  for (const [k, S] of Object.entries(STANDS)) if (player.pos.x > S.x0 && player.pos.x < S.x1 && player.pos.z > S.z0 && player.pos.z < S.z1 + 1.2) return k;
+  return null;
+}
 function atCounter() { return player.pos.x > -9.8 && player.pos.x < -2.6 && player.pos.z > 3.8 && player.pos.z < 6.6; }
 
 input.onLockChange = (locked, reason) => {
@@ -308,6 +358,7 @@ input.onClick = (button, phase) => {
       else if (r === 'full') { hud.notify('Cette tablette est pleine', 'bad'); audio.error(); }
       else if (r === 'other') { hud.notify('Un autre produit est déjà rangé ici', 'bad'); audio.error(); }
       else if (r === 'none') { hud.notify('Achète d\'abord cette étagère sur l\'ordinateur', 'bad'); audio.error(); }
+      else if (r === 'zone') { hud.notify(zoneMessage(held.product), 'bad'); audio.error(); }
     } else if (t.kind === 'scan' && !t.done) club.scan(t.uid);
     else if (t.kind === 'card' && club.counter.phase === 'pay' && club.counter.method === 'card') openUi('card');
     else if (t.kind === 'cash' && club.counter.phase === 'pay' && club.counter.method === 'cash') openUi('cash');
@@ -320,9 +371,43 @@ input.onClick = (button, phase) => {
   }
 };
 
+function zoneMessage(product) {
+  const z = PRODUCTS[product].zone;
+  return z === 'bar' ? 'Ce produit se range dans le frigo de la buvette' : z === 'snack' ? 'Ce produit se range dans la vitrine du snack' : 'Ce produit se range dans la boutique du club-house';
+}
+function orderText(cust) {
+  return cust.order.map(o => `${o.qty} × ${PRODUCTS[o.product].short}`).join(' + ');
+}
+
+// Terrain dont le créneau est dépassé, si le joueur est dessus ou à son portillon.
+function nearOvertimeCourt() {
+  for (const c of COURTS) {
+    if (!club.court[c.id].overtime) continue;
+    const S = COURT_SLOTS[c.id], A = COURT_TYPES[c.surface].sport === 'padel' ? { w: 12, l: 22 } : { w: 18.3, l: 36.6 };
+    if (Math.abs(player.pos.x - S.cx) < A.w / 2 + 2 && Math.abs(player.pos.z - S.cz) < A.l / 2 + 2.5) return c.id;
+  }
+  return null;
+}
+function evictAt(courtId) {
+  const r = club.evict(courtId, 'player');
+  if (r === 'ok') { audio.whistle(); hud.notify('Les joueurs libèrent le terrain', 'good'); }
+  else if (r === 'refused') audio.error();
+}
+
 function interact() {
   const t = ui.target;
+  if (!t || t.kind === 'court') {
+    const oc = nearOvertimeCourt();
+    if (oc) return evictAt(oc);
+  }
   if (!t) return;
+  if (t.kind === 'stand') {
+    const r = club.serveStand(t.stand);
+    if (r === 'none') hud.notify('Personne n\'attend au comptoir', 'info');
+    else if (r === 'ok') completeObjective('serve');
+    return;
+  }
+
   if (t.kind === 'box' && !player.held) {
     const box = club.s.boxes.find(b => b.id === t.id);
     if (!box || !club.pickBox(box)) return;
@@ -371,7 +456,8 @@ function updateTarget(dt) {
       const lvl = club.s.shelves[t.shelf].levels[t.level];
       const name = lvl.product ? `${PRODUCTS[lvl.product].short} · ${lvl.qty} / ${PRODUCTS[lvl.product].shelf}` : 'Emplacement libre';
       if (held) {
-        if (lvl.product && lvl.product !== held.product && lvl.qty > 0) hint = `${name}<br><span class="warn">Un autre produit est rangé ici</span>`;
+        if (SHELF_SLOTS[t.shelf].zone !== PRODUCTS[held.product].zone) hint = `${name}<br><span class="warn">${zoneMessage(held.product)}</span>`;
+        else if (lvl.product && lvl.product !== held.product && lvl.qty > 0) hint = `${name}<br><span class="warn">Un autre produit est rangé ici</span>`;
         else hint = `${name}<br>${key('Clic gauche')} Ranger · ${key('Clic droit')} Reprendre`;
       } else hint = lvl.product && lvl.qty === 0 ? `${name}<br>${key('Clic droit')} Retirer l'étiquette` : name;
     } else if (t.kind === 'box' && !held) {
@@ -382,7 +468,14 @@ function updateTarget(dt) {
     else if (t.kind === 'scan' && !t.done) hint = `${key('Clic')} Scanner l'article`;
     else if (t.kind === 'card') hint = club.counter.phase === 'pay' && club.counter.method === 'card' ? `${key('Clic')} Encaisser par carte` : 'Terminal de paiement';
     else if (t.kind === 'cash') hint = club.counter.phase === 'pay' && club.counter.method === 'cash' ? `${key('Clic')} Ouvrir le tiroir-caisse` : 'Tiroir-caisse';
-    else if (t.kind === 'court') {
+    else if (t.kind === 'stand') {
+      const cust = club.standOrder(t.stand);
+      const name = t.stand === 'buvette' ? 'Buvette' : 'Snack';
+      if (cust) {
+        const missing = cust.order.find(o => club.standStock(t.stand, o.product) < o.qty);
+        hint = `${name} · commande : ${orderText(cust)}${missing ? `<br><span class="warn">Stock insuffisant : ${PRODUCTS[missing.product].short}</span>` : ''}<br>${key('E')} Servir`;
+      } else hint = `${name} · personne n'attend`;
+    } else if (t.kind === 'court') {
       const st = club.s.courts[t.court];
       if (!club.canClean(t.court)) hint = 'Partie en cours';
       else if (st.wear > 0.02) hint = `${key('Maintenir E')} Brosser le terrain · usure ${(st.wear * 100).toFixed(0)} %`;
@@ -395,6 +488,11 @@ function updateTarget(dt) {
     audio.brushing(true);
     if (ui.progress >= 1) { club.clean(t.court); ui.progress = 0; audio.brushing(false); audio.place(); completeObjective('clean'); hud.notify('Terrain brossé', 'good'); }
   } else { ui.progress = 0; audio.brushing(false); }
+  // Près d'un terrain dont le créneau est dépassé : on peut faire sortir les joueurs.
+  if (!hint || t?.kind === 'court') {
+    const oc = nearOvertimeCourt();
+    if (oc) hint = `<span class="warn">${COURTS.find(c => c.id === oc).label} : créneau dépassé !</span><br>${key('E')} Faire sortir les joueurs`;
+  }
   ui.hint = hint;
 }
 
@@ -441,7 +539,7 @@ function tick() {
     env.setTime(10.5 * 60 + Math.sin(menuT) * 30, new THREE.Vector3(0, 0, 5));
   } else {
     if (mode === 'play') {
-      club.update(dt, { playerAtCounter: atCounter() });
+      club.update(dt, { playerAtCounter: atCounter(), playerAtStand: atStand() });
       player.update(dt, input, colliders, WORLD);
       player.pushFrom(club.persons);
       player.resolve(colliders);
@@ -453,10 +551,12 @@ function tick() {
     }
     for (const p of club.persons) personViews.get(p.id)?.update(dt, p);
     courts.update(dt);
+    stands.setBarrier(traffic.update(dt));
     building.animateCounter(dt);
     player.animateHeld(dt);
     const { night } = env.setTime(club.s.minute, player.pos);
     building.update(club.s.minute, night);
+    stands.update(dt, night);
     courts.setNight(night > 0.35 && club.s.upgrades.lights);
     hud.update(club, ui);
     const ch = input.locked || input.fallback || mode !== 'play' || input.uiOpen;

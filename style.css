@@ -70,7 +70,22 @@ kbd { font: 600 12px var(--font); background: rgba(255,255,255,.92); color: var(
 .status.open { background: var(--green-2); }
 .status.closed { background: var(--bad); }
 .status.prep { background: #e0a020; color: var(--ink); }
-#prep { position: absolute; right: 16px; top: calc(96px + env(safe-area-inset-top, 0px)); max-width: 300px; background: var(--glass); padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; backdrop-filter: blur(6px); }
+.event-chip { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; background: var(--ball); color: var(--ink); cursor: help; }
+#challenge { width: 254px; box-sizing: border-box; background: var(--glass); border-radius: 12px; padding: 9px 12px; backdrop-filter: blur(6px); display: grid; gap: 4px; font-size: 13px; }
+#challenge span { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ball); }
+#challenge b { font-size: 14px; line-height: 1.3; }
+#challenge .bar { height: 6px; background: rgba(255,255,255,.2); border-radius: 3px; overflow: hidden; }
+#challenge .bar i { display: block; height: 100%; background: var(--ball); transition: width .4s; }
+#challenge small { opacity: .8; }
+#challenge.done { box-shadow: inset 0 0 0 2px var(--green-2); }
+#challenge.done .bar i { background: var(--green-2); }
+.sum-extra { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
+.sum-extra .pos { color: #1d7a45; } .sum-extra .neg { color: var(--bad); }
+.progress-bar { height: 8px; background: var(--paper-2); border-radius: 4px; overflow: hidden; margin-top: 6px; }
+.progress-bar i { display: block; height: 100%; background: var(--green-2); }
+.zone-title { grid-column: 1 / -1; margin: 6px 0 0; font-size: 14px; letter-spacing: .1em; text-transform: uppercase; color: var(--clay); }
+.promo { color: var(--clay); font-weight: 700; }
+#prep { max-width: 254px; box-sizing: border-box; background: var(--glass); padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; backdrop-filter: blur(6px); }
 #prep b { color: var(--ball); }
 
 #crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1.5px rgba(0,0,0,.35); transition: transform .12s; }

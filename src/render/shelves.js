@@ -11,12 +11,21 @@ const W = 2.1, D = 0.6;
 // Disposition des articles sur une tablette : colonnes x rangées, espacements.
 const LAYOUT = {
   balls: [5, 2, 0.15, 0.2], padelballs: [5, 2, 0.15, 0.2], water: [6, 2, 0.13, 0.2], iso: [6, 2, 0.13, 0.2],
-  grip: [6, 2, 0.14, 0.2], racket: [2, 2, 0.8, 0.24], padelracket: [2, 2, 0.8, 0.26], cap: [4, 2, 0.32, 0.24],
+  grip: [6, 2, 0.14, 0.2], cap: [4, 2, 0.32, 0.24], energy: [6, 2, 0.15, 0.2], wristband: [6, 2, 0.15, 0.2],
+  strings: [5, 2, 0.16, 0.2], towel: [4, 2, 0.26, 0.24], tshirt: [4, 2, 0.26, 0.24], shoes: [2, 2, 0.6, 0.24], bag: [2, 2, 0.95, 0.26],
+  beer: [6, 2, 0.13, 0.2], soda: [6, 2, 0.13, 0.2], coffee: [6, 2, 0.13, 0.2], juice: [6, 2, 0.13, 0.2],
+  sandwich: [4, 2, 0.22, 0.2], panini: [4, 2, 0.22, 0.2], pizza: [4, 2, 0.22, 0.24], cookie: [6, 2, 0.13, 0.2],
 };
+const RACKET_LAYOUT = [2, 2, 0.8, 0.25];
 
 const metal = new THREE.MeshStandardMaterial({ color: 0x2c3136, metalness: 0.7, roughness: 0.35 });
 const boardMat = new THREE.MeshStandardMaterial({ color: 0xf2efe9, roughness: 0.5 });
-const backMat = new THREE.MeshStandardMaterial({ color: 0x1f6b4a, roughness: 0.7 });
+const backMats = {
+  shop: new THREE.MeshStandardMaterial({ color: 0x1f6b4a, roughness: 0.7 }),
+  // Frigo de la buvette (fond blanc éclairé) et vitrine du snack (bois clair).
+  bar: new THREE.MeshStandardMaterial({ color: 0xf4f7f8, roughness: 0.3, emissive: 0xdff4ff, emissiveIntensity: 0.25 }),
+  snack: new THREE.MeshStandardMaterial({ color: 0xc89a62, roughness: 0.6 }),
+};
 
 function tagTexture() {
   const c = document.createElement('canvas'); c.width = 512; c.height = 96;
@@ -49,6 +58,7 @@ export function createShelves(scene, interactables, state) {
     // Marquage au sol tant que l'étagère n'est pas achetée.
     const mark = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshBasicMaterial({ color: 0x1f6b4a, transparent: true, opacity: 0.18 }));
     mark.rotation.x = -Math.PI / 2; mark.position.y = 0.03;
+    mark.visible = slot.zone === 'shop';
     g.add(mark);
     return { slot, g, mark, built: null, levels: [] };
   });
@@ -58,7 +68,7 @@ export function createShelves(scene, interactables, state) {
     u.g.add(s);
     const add = (geo, m, x, y, z) => { const o = new THREE.Mesh(geo, m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; s.add(o); return o; };
     for (const x of [-W / 2 + 0.03, W / 2 - 0.03]) for (const z of [-D / 2 + 0.03, D / 2 - 0.03]) add(new THREE.BoxGeometry(0.04, 1.9, 0.04), metal, x, 0.95, z);
-    add(new THREE.BoxGeometry(W, 1.75, 0.02), backMat, 0, 0.98, -D / 2 + 0.01);
+    add(new THREE.BoxGeometry(W, 1.75, 0.02), backMats[u.slot.zone] ?? backMats.shop, 0, 0.98, -D / 2 + 0.01);
     add(new THREE.BoxGeometry(W, 0.06, D), metal, 0, 1.9, 0);
     u.levels = LEVEL_Y.map((y, li) => {
       add(new THREE.BoxGeometry(W - 0.02, 0.03, D - 0.04), boardMat, 0, y - 0.015, 0.01);
@@ -98,12 +108,13 @@ export function createShelves(scene, interactables, state) {
       // Reconstruit les articles visibles.
       L.items.clear();
       if (!lvl.product) return;
-      const [cols, rows, sx, sz] = LAYOUT[lvl.product];
+      const isRacket = !!PRODUCTS[lvl.product].racket;
+      const [cols, rows, sx, sz] = isRacket ? RACKET_LAYOUT : LAYOUT[lvl.product] ?? [5, 2, 0.16, 0.2];
       for (let k = 0; k < lvl.qty; k++) {
         const r = Math.floor(k / cols), c = k % cols;
         const m = productMesh(lvl.product);
         const x = (c - (cols - 1) / 2) * sx, z = 0.12 - r * sz;
-        if (lvl.product === 'racket' || lvl.product === 'padelracket') {
+        if (isRacket) {
           m.rotation.set(-Math.PI / 2, 0, Math.PI / 2);
           m.position.set(x + 0.3, 0.025, z - 0.02);
         } else m.position.set(x, 0, z);

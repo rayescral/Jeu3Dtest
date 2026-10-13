@@ -27,11 +27,14 @@ function limb(len, r, material) {
 export function createPersonView(person) {
   const rnd = mulberry(Math.floor(person.seed * 1e9));
   const pick = arr => arr[Math.floor(rnd() * arr.length)];
-  const staff = person.role === 'reception' || person.role === 'keeper';
+  // Personnel : tenue de travail selon le poste (ouvriers de chantier compris).
+  const UNIFORM = { reception: 0x1f6b4a, keeper: 0x6b7a3a, security: 0x15171a, barman: 0xf2f2f0, cook: 0xffffff, worker: 0xff8c1a };
+  const staff = person.role in UNIFORM;
+  const vip = !!person.cust?.vip;
   const skin = mat(pick(SKIN), 0.6);
   const hair = mat(pick(HAIR), 0.8);
-  const top = mat(staff ? (person.role === 'reception' ? 0x1f6b4a : 0x6b7a3a) : pick(TOPS), 0.75);
-  const bottom = mat(staff ? 0x1b2a44 : pick(BOTTOMS), 0.75);
+  const top = mat(staff ? UNIFORM[person.role] : vip ? 0xd4af37 : pick(TOPS), 0.75);
+  const bottom = mat(staff ? (person.role === 'worker' ? 0x2f4a6b : 0x1b2a44) : pick(BOTTOMS), 0.75);
   const shoe = mat(staff ? 0x2a2a2a : 0xf4f4f0, 0.5);
   const female = rnd() < 0.48;
   const scale = 0.92 + rnd() * 0.16;
@@ -71,7 +74,24 @@ export function createPersonView(person) {
     tail.position.set(0, 0.18, -0.13); tail.rotation.x = 0.5;
     neck.add(tail);
   }
-  if (!staff && rnd() < 0.3) {
+  if (person.role === 'worker' || person.role === 'cook') {
+    // Casque de chantier ou toque.
+    const helmet = new THREE.Mesh(person.role === 'worker' ? (geo.helmet ??= new THREE.SphereGeometry(0.13, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2)) : (geo.toque ??= new THREE.CylinderGeometry(0.11, 0.1, 0.16, 16)),
+      mat(person.role === 'worker' ? 0xffd21a : 0xffffff, 0.5));
+    helmet.position.y = person.role === 'worker' ? 0.24 : 0.36;
+    helmet.castShadow = true;
+    neck.add(helmet);
+  } else if (person.role === 'security') {
+    // Brassard « Sécurité » : bande jaune sur le bras, oreillette.
+    const cap = new THREE.Mesh(geo.secCap ??= new THREE.SphereGeometry(0.122, 20, 10, 0, Math.PI * 2, 0, Math.PI / 2), mat(0x15171a, 0.7));
+    cap.position.y = 0.23; cap.scale.set(1, 0.8, 1.05);
+    neck.add(cap);
+  } else if (vip) {
+    // Lunettes de soleil des clients VIP.
+    const glasses = new THREE.Mesh(geo.glasses ??= new THREE.BoxGeometry(0.17, 0.035, 0.02), mat(0x111111, 0.2));
+    glasses.position.set(0, 0.215, 0.105);
+    neck.add(glasses);
+  } else if (!staff && rnd() < 0.3) {
     // Casquette ou bandeau.
     const band = new THREE.Mesh(geo.band ??= new THREE.TorusGeometry(0.112, 0.016, 8, 24), mat(0xffffff, 0.8));
     band.rotation.x = Math.PI / 2 - 0.15; band.position.y = 0.25;
@@ -107,7 +127,8 @@ export function createPersonView(person) {
   // Raquette dans la main droite (visible sur les courts et à l'arrivée des joueurs).
   let racket = null;
   if (person.holdsRacket) {
-    racket = racketMesh(person.cust?.sport === 'padel');
+    const padel = person.cust?.sport === 'padel';
+    racket = racketMesh(padel, pick(padel ? [0xc8f04a, 0x7a4fd6, 0xff8a3d] : [0x2f6fe0, 0xe8a21a, 0xd63a3a, 0x18191c, 0xff5fa2]));
     racket.rotation.x = Math.PI / 2;
     racket.position.set(0, -0.02, 0.02);
     racket.scale.setScalar(1);
@@ -138,6 +159,7 @@ export function createPersonView(person) {
       // Vitesse mesurée à partir du déplacement réel.
       const vx = (p.x - this.lastX) / Math.max(dt, 1e-4), vz = (p.z - this.lastZ) / Math.max(dt, 1e-4);
       this.lastX = p.x; this.lastZ = p.z;
+      root.visible = !p.hidden;
       const sp = Math.min(3, Math.hypot(vx, vz));
       this.speed = damp(this.speed, sp, 10, dt);
       root.position.set(p.x + this.offsetX, 0, p.z + this.offsetZ);
@@ -170,8 +192,17 @@ export function createPersonView(person) {
       } else if (p.action === 'clean') {
         const b = Math.sin(this.phase * 1.4);
         shR = -0.6 + b * 0.35; shL = -0.6 + b * 0.35; elR = -0.5; elL = -0.5; lean += 0.2;
-      } else if (p.role === 'reception') {
+      } else if (p.action === 'serve') {
+        // Service au comptoir : bras tendus, petit mouvement.
+        const b = Math.sin(this.phase * 1.3);
+        shR = -0.9 + b * 0.2; elR = -0.6; shL = -0.4; elL = -1.0;
+      } else if (p.action === 'hammer') {
+        const b = Math.sin(this.phase * 3.2);
+        shR = -1.6 + Math.max(0, b) * 1.2; elR = -0.4; shL = -0.6; elL = -0.6; lean += 0.15;
+      } else if (p.role === 'reception' || p.role === 'barman' || p.role === 'cook') {
         shR = -0.35; shL = -0.35; elR = -1.2; elL = -1.2;
+      } else if (p.role === 'security') {
+        shR = 0.15; shL = 0.15; elR = -0.2; elL = -0.2;
       }
       if (p.action !== 'browse') this.neck.rotation.x = damp(this.neck.rotation.x, 0, 6, dt);
 
