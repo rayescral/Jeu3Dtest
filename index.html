@@ -17,6 +17,14 @@
       color: #fff; font-size: 32px; font-weight: bold; text-shadow: 0 2px 8px #000;
       pointer-events: none; text-align: center;
     }
+    #pad { position: fixed; bottom: 16px; left: 16px; right: 16px; display: none; justify-content: space-between; align-items: flex-end; user-select: none; -webkit-user-select: none; }
+    @media (pointer: coarse) { #pad { display: flex; } }
+    #dpad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; }
+    #pad button {
+      border: 0; border-radius: 12px; background: rgba(0,0,0,.4); color: #fff; font-size: 22px;
+      touch-action: none;
+    }
+    #jump { width: 84px; height: 84px; border-radius: 50% !important; }
   </style>
 </head>
 <body>
@@ -26,6 +34,14 @@
     <small>ZQSD / WASD / flèches pour bouger · Espace pour sauter · R pour rejouer</small>
   </div>
   <div id="msg"></div>
+  <div id="pad">
+    <div id="dpad">
+      <span></span><button data-key="ArrowUp" aria-label="Haut">▲</button><span></span>
+      <button data-key="ArrowLeft" aria-label="Gauche">◀</button><span></span><button data-key="ArrowRight" aria-label="Droite">▶</button>
+      <span></span><button data-key="ArrowDown" aria-label="Bas">▼</button><span></span>
+    </div>
+    <button id="jump" data-key="Space" aria-label="Sauter">⤒</button>
+  </div>
 
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -105,6 +121,12 @@
     const keys = {};
     addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') reset(); });
     addEventListener('keyup', e => { keys[e.code] = false; });
+    // Boutons tactiles (téléphone / tablette)
+    document.querySelectorAll('#pad button').forEach(b => {
+      const k = b.dataset.key;
+      b.addEventListener('pointerdown', e => { e.preventDefault(); keys[k] = true; });
+      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { keys[k] = false; });
+    });
     const down = (...codes) => codes.some(c => keys[c]);
 
     // --- Partie ------------------------------------------------------------
@@ -132,6 +154,7 @@
       $('msg').textContent = '';
     }
     reset();
+    addEventListener('pointerdown', e => { if (finished && !e.target.closest('#pad')) reset(); });
 
     // --- Boucle de jeu -----------------------------------------------------
     const clock = new THREE.Clock();
@@ -207,7 +230,7 @@
         $('time').textContent = time.toFixed(1);
         if (coins.length === 0) {
           finished = true;
-          $('msg').innerHTML = `Bravo ! 🎉<br>${time.toFixed(1)} s<br><small style="font-size:18px">Appuie sur R pour rejouer</small>`;
+          $('msg').innerHTML = `Bravo ! 🎉<br>${time.toFixed(1)} s<br><small style="font-size:18px">Appuie sur R (ou touche l'écran) pour rejouer</small>`;
         }
       }
 

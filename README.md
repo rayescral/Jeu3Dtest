@@ -21,3 +21,5 @@ Ensuite, ouvre http://localhost:8000.
 | ZQSD / WASD / flèches | Se déplacer |
 | Espace | Sauter (on peut monter sur les caisses) |
 | R | Rejouer |
+
+Sur téléphone ou tablette, des boutons apparaissent à l'écran (flèches + saut). Touche l'écran pour rejouer.
