@@ -65,6 +65,7 @@ npm test
 ```
 
 - `tests/simulation.test.mjs` joue 8 journées complètes avec un joueur automatique : commandes, rangement, encaissements en carte et en espèces, entretien, constructions, embauches. Il vérifie qu'aucun client ne reste bloqué, que le stock, l'argent et les réservations restent cohérents, et que la sauvegarde se recharge.
+- `tests/navigateur.test.cjs` joue dans un vrai navigateur avec de vrais clics et touches : commande, carton, rangement, pancarte, scan, paiement, pause.
 - `tests/paths.test.mjs` vérifie qu'aucun trajet de personnage ne traverse un mur, un grillage, un filet, le comptoir ou une étagère.
 
 Pour tester dans la console du navigateur : `__club.club` donne accès à l'état de la partie (par exemple `__club.club.s.money = 50000`).

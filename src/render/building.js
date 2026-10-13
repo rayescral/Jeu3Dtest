@@ -299,6 +299,7 @@ export function createBuilding(scene, interactables) {
   // --- Articles posés sur le comptoir --------------------------------------------------------------------
   const counterGroup = new THREE.Group();
   group.add(counterGroup);
+  interactables.push(counterGroup);   // les articles posés sur le tapis se scannent au clic
   const ticketTex = {};
   const ticket = (text, color) => {
     ticketTex[text] ??= canvasTexture(256, 160, (g, w, h) => {
@@ -309,6 +310,7 @@ export function createBuilding(scene, interactables) {
     });
     const m = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.006, 0.1), [std(0xffffff), std(0xffffff), new THREE.MeshStandardMaterial({ map: ticketTex[text] }), std(0xffffff), std(0xffffff), std(0xffffff)]);
     m.position.y = 0.004;
+    m.rotation.y = Math.PI;   // texte tourné vers le caissier
     return m;
   };
   const counterViews = new Map();

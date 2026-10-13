@@ -37,13 +37,8 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 // Qualité graphique : « haute » par défaut, « économie » pour les ordinateurs modestes.
 let quality = 'high';
 try { quality = localStorage.getItem('tennis-club-quality') || 'high'; } catch { /* stockage indisponible */ }
-// Résolution adaptative : si les images mettent trop de temps à s'afficher (grand écran, carte
-// graphique modeste), on baisse un peu la résolution interne, puis on la remonte quand ça va mieux.
-let maxRatio = 1, renderScale = 1, frameAvg = 16, adaptT = 0;
 function applyQuality() {
-  maxRatio = quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75;
-  renderScale = 1;
-  renderer.setPixelRatio(maxRatio);
+  renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75);
   renderer.shadowMap.enabled = quality === 'high';
   scene?.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
   fit?.();
@@ -436,21 +431,8 @@ qBtn.addEventListener('click', () => {
 const clock = new THREE.Clock();
 let menuT = 0, birdT = 4, stepPhase = 0;
 
-function adaptResolution(rawDt) {
-  frameAvg += (rawDt * 1000 - frameAvg) * 0.05;
-  adaptT += rawDt;
-  if (adaptT < 1.5 || document.hidden) return;
-  adaptT = 0;
-  const before = renderScale;
-  if (frameAvg > 24 && renderScale > 0.55) renderScale = Math.max(0.55, renderScale - 0.1);
-  else if (frameAvg < 15 && renderScale < 1) renderScale = Math.min(1, renderScale + 0.05);
-  if (renderScale !== before) { renderer.setPixelRatio(maxRatio * renderScale); fit(); }
-}
-
 function tick() {
-  const rawDt = clock.getDelta();
-  const dt = Math.min(rawDt, 0.05);
-  if (rawDt < 0.5) adaptResolution(rawDt);
+  const dt = Math.min(clock.getDelta(), 0.05);
   if (mode === 'menu') {
     // Plan large autour du club derrière l'écran titre.
     menuT += dt * 0.05;

@@ -21,11 +21,14 @@ export function createInput(canvas) {
   // Si le navigateur refuse ou ignore le verrouillage, on passe en mode "glisser pour regarder".
   // Un échec isolé est normal (Chrome refuse un nouveau verrouillage juste après Échap) : on ne bascule
   // qu'après deux échecs consécutifs.
-  let lockTimer = null, failures = 0;
+  // Si la capture a déjà fonctionné une fois, le navigateur la permet : un refus n'est que passager
+  // (Chrome refuse pendant environ une seconde après Échap). On ne bascule en mode "glisser" que si
+  // la capture n'a jamais marché.
+  let lockTimer = null, failures = 0, everLocked = false;
   const toFallback = () => {
     if (state.locked || state.fallback) return;
     failures++;
-    if (failures >= 2) state.fallback = true;
+    if (!everLocked && failures >= 2) state.fallback = true;
     state.onLockChange?.(false, 'fail');
   };
   const requestLock = () => {
@@ -47,7 +50,7 @@ export function createInput(canvas) {
   document.addEventListener('pointerlockchange', () => {
     const was = state.locked;
     state.locked = document.pointerLockElement === canvas;
-    if (state.locked) { clearTimeout(lockTimer); failures = 0; }
+    if (state.locked) { clearTimeout(lockTimer); failures = 0; everLocked = true; state.fallback = false; }
     // 'exit' : le joueur a quitté la capture (Échap) ; on proposera la pause.
     state.onLockChange?.(state.locked, was && !state.locked ? 'exit' : 'change');
   });
@@ -67,7 +70,12 @@ export function createInput(canvas) {
   });
   addEventListener('mousemove', e => {
     if (state.uiOpen) return;
-    if (state.locked) { state.lookX += e.movementX; state.lookY += e.movementY; return; }
+    if (state.locked) {
+      // Chrome (surtout sous Windows) envoie parfois des sauts énormes et isolés : on les ignore.
+      if (Math.abs(e.movementX) > 250 || Math.abs(e.movementY) > 250) return;
+      state.lookX += e.movementX; state.lookY += e.movementY;
+      return;
+    }
     if (drag) {
       const dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       drag.moved += Math.abs(dx) + Math.abs(dy);
