@@ -50,7 +50,7 @@ export function createEnvironment(scene, renderer) {
   // --- Ciel ---------------------------------------------------------------------------------
   const skyMat = new THREE.ShaderMaterial({
     uniforms: {
-      uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uGround: { value: new THREE.Color(0x77716a) },
+      uTop: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() }, uGround: { value: new THREE.Color(0x3a4a32) },
       uSunColor: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) },
     },
     vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, side: THREE.BackSide, depthWrite: false,
@@ -200,10 +200,7 @@ export function createEnvironment(scene, renderer) {
   scene.add(board);
 
   // --- Heure du jour ------------------------------------------------------------------------------
-  let lastEnvHour = -10, ibl = false;
-  // Éclairage par l'environnement (qualité haute et ultra) : tous les matériaux reçoivent la lumière
-  // et les reflets du ciel, ce qui donne un rendu beaucoup plus naturel.
-  function setIBL(on) { ibl = on; scene.environment = on && envRT ? envRT.texture : null; lastEnvHour = -10; }
+  let lastEnvHour = -10;
   const sunDir = new THREE.Vector3();
   function setTime(minute, focus) {
     const hour = minute / 60;
@@ -220,9 +217,8 @@ export function createEnvironment(scene, renderer) {
     const day = clamp(sunDir.y * 6, 0, 1);
     sun.color.copy(c.sun);
     sun.intensity = 3.2 * day;
-    hemi.intensity = lerp(0.35, 0.85, clamp(sunDir.y * 3 + 0.15, 0, 1)) * (ibl ? 0.55 : 1);
-    ambient.intensity = lerp(0.75, 0.9, day) * (ibl ? 0.35 : 1);
-    scene.environmentIntensity = lerp(0.25, 0.85, day);
+    hemi.intensity = lerp(0.35, 0.85, clamp(sunDir.y * 3 + 0.15, 0, 1));
+    ambient.intensity = lerp(0.75, 0.9, day);
     // Le soir, l'ambiance prend la teinte chaude des éclairages du club.
     hemi.color.copy(c.top).lerp(new THREE.Color(0xffffff), 0.55).lerp(new THREE.Color(0xffd9a8), clamp(1 - sunDir.y * 6, 0, 1) * 0.6);
     scene.fog.color.copy(c.hor);
@@ -238,13 +234,12 @@ export function createEnvironment(scene, renderer) {
         if (!o.material) return;
         for (const m of [].concat(o.material)) if (m.userData.reflective) { m.envMap = envRT.texture; m.needsUpdate = !m.userData.hadEnv; m.userData.hadEnv = true; }
       });
-      if (ibl) scene.environment = envRT.texture;
       old?.dispose();
     }
     return { night: 1 - day, hour };
   }
 
-  return { setTime, setIBL, sun, colliders };
+  return { setTime, sun, colliders };
 }
 
 // Voiture : silhouette latérale extrudée aux arêtes arrondies, vitres teintées, roues.

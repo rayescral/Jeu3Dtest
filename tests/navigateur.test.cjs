@@ -5,8 +5,6 @@ const { chromium } = require('playwright');
 (async () => {
 const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
-// Rendu logiciel (sans carte graphique) : le mode économie suffit pour tester la logique.
-await p.addInitScript(() => { try { localStorage.setItem('tennis-club-quality', 'low'); } catch {} });
 p.setDefaultTimeout(180000);
 const errs = []; p.on('pageerror', e => errs.push('PAGE ' + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 await p.route('https://fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));

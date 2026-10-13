@@ -18,21 +18,7 @@ npm run build      # régénère jeu.js après une modification
 npm test           # tests automatiques
 ```
 
-Les modèles 3D et textures sont dans `assets/` (originaux dans `assets/src/`, préparés par `npm run assets`) et sont intégrés à `jeu.js` au moment du build.
-
-## Graphismes
-
-Dans le menu pause (Échap), le bouton « Graphismes » propose trois niveaux :
-
-- **Ultra** : tout activé, y compris l'occlusion ambiante (coins et contacts assombris) et des ombres plus fines. Pour une bonne carte graphique.
-- **Haute** (par défaut) : éclairage par le ciel, reflets, ombres douces, anticrénelage, léger halo autour des lumières.
-- **Économie** : rendu simple, sans ombres ni effets. À choisir si le jeu saccade.
-
-## Crédits
-
-- Personnages : X Bot et animations de [Mixamo](https://www.mixamo.com) (Adobe), via les exemples de three.js.
-- Parquet : textures `hardwood2` des exemples de [three.js](https://threejs.org) (licence MIT).
-- Moteur 3D : [three.js](https://threejs.org) (licence MIT).
+`dev.html` charge directement les sources (pratique pour développer, mais il faut un serveur local : `npm start` puis http://localhost:8000/dev.html).
 
 ## Commandes
 
@@ -47,7 +33,7 @@ Dans le menu pause (Échap), le bouton « Graphismes » propose trois niveaux :
 | Clic droit | Reprendre un article de l'étagère dans le carton, retirer une étiquette vide |
 | G | Poser le carton |
 | Tab | Ordinateur du club |
-| Échap | Pause (sauvegarde, son, qualité graphique : ultra, haute, économie) |
+| Échap | Pause (sauvegarde, son, qualité graphique) |
 
 Si le navigateur refuse de capturer la souris, le jeu passe tout seul en mode « maintenir le clic droit et glisser pour regarder ».
 
