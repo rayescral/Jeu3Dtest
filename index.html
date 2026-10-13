@@ -2,248 +2,77 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Jeu 3D – Maquette</title>
-  <style>
-    html, body { margin: 0; height: 100%; overflow: hidden; background: #87ceeb; font-family: system-ui, sans-serif; }
-    #hud {
-      position: fixed; top: 12px; left: 12px; color: #fff;
-      background: rgba(0,0,0,.45); padding: 10px 14px; border-radius: 10px;
-      font-size: 15px; line-height: 1.5; user-select: none;
-    }
-    #hud b { font-size: 20px; }
-    #msg {
-      position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
-      color: #fff; font-size: 32px; font-weight: bold; text-shadow: 0 2px 8px #000;
-      pointer-events: none; text-align: center;
-    }
-    #pad { position: fixed; bottom: 16px; left: 16px; right: 16px; display: none; justify-content: space-between; align-items: flex-end; user-select: none; -webkit-user-select: none; }
-    @media (pointer: coarse) { #pad { display: flex; } }
-    #dpad { display: grid; grid-template-columns: repeat(3, 56px); grid-template-rows: repeat(3, 56px); gap: 4px; }
-    #pad button {
-      border: 0; border-radius: 12px; background: rgba(0,0,0,.4); color: #fff; font-size: 22px;
-      touch-action: none;
-    }
-    #jump { width: 84px; height: 84px; border-radius: 50% !important; }
-  </style>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Le Gardien des Cristaux</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" />
+  <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-  <div id="hud">
-    Pièces : <b id="score">0</b> / <span id="total">0</span><br />
-    Temps : <span id="time">0.0</span> s<br />
-    <small>ZQSD / WASD / flèches pour bouger · Espace pour sauter · R pour rejouer</small>
-  </div>
-  <div id="msg"></div>
-  <div id="pad">
-    <div id="dpad">
-      <span></span><button data-key="ArrowUp" aria-label="Haut">▲</button><span></span>
-      <button data-key="ArrowLeft" aria-label="Gauche">◀</button><span></span><button data-key="ArrowRight" aria-label="Droite">▶</button>
-      <span></span><button data-key="ArrowDown" aria-label="Bas">▼</button><span></span>
+  <div id="game"></div>
+  <div id="vignette"></div>
+
+  <!-- Interface pendant la partie -->
+  <div id="hud" hidden>
+    <div class="panel top-left">
+      <div id="hearts"></div>
+      <div class="row"><span class="gem">◆</span><span id="crystals">0 / 5</span><span class="sep">·</span><span id="timer">0:00</span></div>
+      <div id="objective"></div>
     </div>
-    <button id="jump" data-key="Space" aria-label="Sauter">⤒</button>
+    <canvas id="minimap" width="150" height="150" aria-label="Carte de l'île"></canvas>
+    <button id="btn-mute" class="icon-btn" aria-label="Couper le son">🔊</button>
+    <div id="boss" hidden>
+      <div class="boss-name">Roi Slime</div>
+      <div class="boss-bar"><div id="boss-fill"></div></div>
+    </div>
+    <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+    <div id="touch">
+      <div id="stick" hidden><div id="knob"></div></div>
+      <button id="btn-jump" aria-label="Sauter">⤒</button>
+      <button id="btn-attack" aria-label="Attaquer">⚔</button>
+    </div>
   </div>
+
+  <!-- Écran titre -->
+  <section id="menu" class="screen">
+    <div class="card">
+      <p class="eyebrow">Un jeu d'aventure en 3D</p>
+      <h1>Le Gardien des Cristaux</h1>
+      <p class="story">Les cinq cristaux qui alimentent le portail de l'île sont gardés par des slimes.
+        Récupère-les, affronte le Roi Slime, puis franchis le portail pour rentrer chez toi.</p>
+      <dl class="controls">
+        <dt>ZQSD / WASD / flèches</dt><dd>Se déplacer</dd>
+        <dt>Maj</dt><dd>Courir</dd>
+        <dt>Espace</dt><dd>Sauter</dd>
+        <dt>Clic / J / F</dt><dd>Coup d'épée</dd>
+        <dt>Souris (glisser) + molette</dt><dd>Tourner et zoomer la caméra</dd>
+      </dl>
+      <p class="touch-hint">Sur téléphone : joystick à gauche, glisse à droite pour la caméra.</p>
+      <button id="btn-start" class="big-btn">Jouer</button>
+    </div>
+  </section>
+
+  <!-- Défaite -->
+  <section id="over" class="screen" hidden>
+    <div class="card">
+      <h2>Tu es tombé…</h2>
+      <p class="stats">Cristaux : <b id="over-crystals">0</b> · Slimes vaincus : <b id="over-kills">0</b></p>
+      <button id="btn-retry" class="big-btn">Réessayer</button>
+    </div>
+  </section>
+
+  <!-- Victoire -->
+  <section id="win" class="screen" hidden>
+    <div class="card">
+      <p class="eyebrow">Victoire</p>
+      <h2>Tu as franchi le portail !</h2>
+      <p class="stats">Temps : <b id="win-time">0:00</b> · Slimes vaincus : <b id="win-kills">0</b></p>
+      <button id="btn-again" class="big-btn">Rejouer</button>
+    </div>
+  </section>
 
   <script type="importmap">
     { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
-  <script type="module">
-    import * as THREE from 'three';
-
-    // --- Scène, caméra, rendu ---------------------------------------------
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87ceeb);
-    scene.fog = new THREE.Fog(0x87ceeb, 30, 80);
-
-    const camera = new THREE.PerspectiveCamera(60, innerWidth / innerHeight, 0.1, 200);
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(innerWidth, innerHeight);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.shadowMap.enabled = true;
-    document.body.appendChild(renderer.domElement);
-
-    addEventListener('resize', () => {
-      camera.aspect = innerWidth / innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth, innerHeight);
-    });
-
-    // --- Lumières ----------------------------------------------------------
-    scene.add(new THREE.HemisphereLight(0xffffff, 0x4a7a3a, 0.7));
-    const sun = new THREE.DirectionalLight(0xffffff, 1.2);
-    sun.position.set(15, 25, 10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    Object.assign(sun.shadow.camera, { left: -30, right: 30, top: 30, bottom: -30 });
-    scene.add(sun);
-
-    // --- Sol ---------------------------------------------------------------
-    const ARENA = 25; // demi-taille de l'arène
-    const ground = new THREE.Mesh(
-      new THREE.PlaneGeometry(ARENA * 2, ARENA * 2),
-      new THREE.MeshStandardMaterial({ color: 0x5fb85f })
-    );
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // --- Obstacles (caisses) ----------------------------------------------
-    const obstacles = [];
-    const boxMat = new THREE.MeshStandardMaterial({ color: 0xb5793a });
-    for (let i = 0; i < 18; i++) {
-      const s = 1.5 + Math.random() * 2;
-      const box = new THREE.Mesh(new THREE.BoxGeometry(s, s, s), boxMat);
-      let x, z;
-      do { x = (Math.random() - .5) * (ARENA * 2 - 6); z = (Math.random() - .5) * (ARENA * 2 - 6); }
-      while (Math.hypot(x, z) < 5);
-      box.position.set(x, s / 2, z);
-      box.castShadow = box.receiveShadow = true;
-      box.userData.half = s / 2;
-      scene.add(box);
-      obstacles.push(box);
-    }
-
-    // --- Joueur (une boule) -----------------------------------------------
-    const RADIUS = 0.6;
-    const player = new THREE.Mesh(
-      new THREE.SphereGeometry(RADIUS, 32, 16),
-      new THREE.MeshStandardMaterial({ color: 0xe74c3c, roughness: 0.4 })
-    );
-    player.castShadow = true;
-    scene.add(player);
-    const vel = new THREE.Vector3();
-
-    // --- Pièces ------------------------------------------------------------
-    const coins = [];
-    const coinGeo = new THREE.TorusGeometry(0.4, 0.12, 12, 24);
-    const coinMat = new THREE.MeshStandardMaterial({ color: 0xffd700, metalness: 0.8, roughness: 0.2, emissive: 0x332200 });
-
-    // --- Entrées clavier ---------------------------------------------------
-    const keys = {};
-    addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'KeyR') reset(); });
-    addEventListener('keyup', e => { keys[e.code] = false; });
-    // Boutons tactiles (téléphone / tablette)
-    document.querySelectorAll('#pad button').forEach(b => {
-      const k = b.dataset.key;
-      b.addEventListener('pointerdown', e => { e.preventDefault(); keys[k] = true; });
-      for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => { keys[k] = false; });
-    });
-    const down = (...codes) => codes.some(c => keys[c]);
-
-    // --- Partie ------------------------------------------------------------
-    const $ = id => document.getElementById(id);
-    let score, time, finished;
-
-    function reset() {
-      coins.forEach(c => scene.remove(c));
-      coins.length = 0;
-      for (let i = 0; i < 10; i++) {
-        const c = new THREE.Mesh(coinGeo, coinMat);
-        let x, z;
-        do { x = (Math.random() - .5) * (ARENA * 2 - 4); z = (Math.random() - .5) * (ARENA * 2 - 4); }
-        while (obstacles.some(o => Math.abs(o.position.x - x) < o.userData.half + 1 && Math.abs(o.position.z - z) < o.userData.half + 1));
-        c.position.set(x, 1, z);
-        c.castShadow = true;
-        scene.add(c);
-        coins.push(c);
-      }
-      player.position.set(0, RADIUS, 0);
-      vel.set(0, 0, 0);
-      score = 0; time = 0; finished = false;
-      $('total').textContent = coins.length;
-      $('score').textContent = 0;
-      $('msg').textContent = '';
-    }
-    reset();
-    addEventListener('pointerdown', e => { if (finished && !e.target.closest('#pad')) reset(); });
-
-    // --- Boucle de jeu -----------------------------------------------------
-    const clock = new THREE.Clock();
-    const ACCEL = 30, FRICTION = 4, GRAVITY = 25, JUMP = 9;
-
-    function update(dt) {
-      // Déplacement
-      const dir = new THREE.Vector3(
-        (down('KeyD', 'ArrowRight') ? 1 : 0) - (down('KeyA', 'KeyQ', 'ArrowLeft') ? 1 : 0),
-        0,
-        (down('KeyS', 'ArrowDown') ? 1 : 0) - (down('KeyW', 'KeyZ', 'ArrowUp') ? 1 : 0)
-      );
-      if (dir.lengthSq()) dir.normalize();
-      vel.x += dir.x * ACCEL * dt;
-      vel.z += dir.z * ACCEL * dt;
-      vel.x -= vel.x * FRICTION * dt;
-      vel.z -= vel.z * FRICTION * dt;
-
-      // Saut + gravité
-      const onGround = player.position.y <= RADIUS + 0.001;
-      if (onGround && keys['Space']) vel.y = JUMP;
-      vel.y -= GRAVITY * dt;
-
-      const prev = player.position.clone();
-      player.position.addScaledVector(vel, dt);
-      if (player.position.y < RADIUS) { player.position.y = RADIUS; vel.y = 0; }
-
-      // Murs de l'arène
-      for (const a of ['x', 'z']) {
-        const lim = ARENA - RADIUS;
-        if (Math.abs(player.position[a]) > lim) { player.position[a] = Math.sign(player.position[a]) * lim; vel[a] *= -0.5; }
-      }
-
-      // Collisions avec les caisses (sphère vs boîte)
-      for (const o of obstacles) {
-        const h = o.userData.half, p = player.position, c = o.position;
-        const closest = new THREE.Vector3(
-          THREE.MathUtils.clamp(p.x, c.x - h, c.x + h),
-          THREE.MathUtils.clamp(p.y, c.y - h, c.y + h),
-          THREE.MathUtils.clamp(p.z, c.z - h, c.z + h)
-        );
-        const diff = p.clone().sub(closest);
-        const d = diff.length();
-        if (d < RADIUS) {
-          if (d === 0) { p.copy(prev); continue; }
-          const n = diff.divideScalar(d);
-          p.addScaledVector(n, RADIUS - d);
-          const vn = vel.dot(n);
-          if (vn < 0) vel.addScaledVector(n, -vn); // on annule la vitesse vers la caisse
-          if (n.y > 0.7 && vel.y <= 0) vel.y = 0;  // posé sur la caisse
-          if (n.y > 0.7 && keys['Space']) vel.y = JUMP;
-        }
-      }
-
-      // Roulement visuel
-      player.rotation.z -= vel.x * dt / RADIUS;
-      player.rotation.x += vel.z * dt / RADIUS;
-
-      // Pièces
-      for (let i = coins.length - 1; i >= 0; i--) {
-        const c = coins[i];
-        c.rotation.y += dt * 3;
-        c.position.y = 1 + Math.sin(performance.now() / 300 + i) * 0.2;
-        if (c.position.distanceTo(player.position) < RADIUS + 0.5) {
-          scene.remove(c);
-          coins.splice(i, 1);
-          $('score').textContent = ++score;
-        }
-      }
-
-      if (!finished) {
-        time += dt;
-        $('time').textContent = time.toFixed(1);
-        if (coins.length === 0) {
-          finished = true;
-          $('msg').innerHTML = `Bravo ! 🎉<br>${time.toFixed(1)} s<br><small style="font-size:18px">Appuie sur R (ou touche l'écran) pour rejouer</small>`;
-        }
-      }
-
-      // Caméra qui suit le joueur
-      const target = player.position.clone().add(new THREE.Vector3(0, 9, 12));
-      camera.position.lerp(target, 1 - Math.exp(-5 * dt));
-      camera.lookAt(player.position);
-    }
-
-    renderer.setAnimationLoop(() => {
-      update(Math.min(clock.getDelta(), 0.05));
-      renderer.render(scene, camera);
-    });
-  </script>
+  <script type="module" src="src/main.js"></script>
 </body>
 </html>
