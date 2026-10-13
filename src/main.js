@@ -1,307 +1,466 @@
-// Ascendance : boucle principale, caméra, règles du vol (atterrissage, circuit) et écrans.
+// Tennis Club Simulator : point d'entrée. Relie la simulation (game/), le rendu (render/),
+// le joueur (core/) et l'interface (ui/).
 import * as THREE from 'three';
-import { damp } from './util.js';
-import { heightAt, gradientAt, forestAt, WATER_LEVEL, AIRFIELD, PLAY_RADIUS } from './heightmap.js';
-import { createTerrain } from './terrain.js';
-import { createSky, createClouds } from './sky.js';
-import { createAir, WIND } from './air.js';
-import { Glider, V_NE } from './glider.js';
-import { createCourse, TURNPOINTS } from './course.js';
-import { createHud } from './hud.js';
-import { createInput } from './input.js';
-import { createAudio } from './audio.js';
+import { Club, createState } from './game/club.js';
+import { PRODUCTS, COURTS, COURT_TYPES } from './game/data.js';
+import { staticColliders, shelfCollider, courtColliders, SHELF_SLOTS, WORLD, LAPTOP } from './game/layout.js';
+import { createEnvironment } from './render/environment.js';
+import { createBuilding } from './render/building.js';
+import { createShelves } from './render/shelves.js';
+import { createCourts } from './render/courts.js';
+import { createPersonView } from './render/people.js';
+import { boxMesh } from './render/products.js';
+import { createInput } from './core/input.js';
+import { Player } from './core/player.js';
+import { createAudio } from './core/audio.js';
+import { createHud } from './ui/hud.js';
+import { createComputer } from './ui/computer.js';
+import { createPayment } from './ui/payment.js';
+import { fmtMoney, fmtMoney0, clamp, lerp } from './core/util.js';
 
 const $ = id => document.getElementById(id);
 
-// --- Rendu -------------------------------------------------------------------------------
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 1.75));
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 0.55;
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-$('game').appendChild(renderer.domElement);
+// En cas d'erreur inattendue, on l'affiche plutôt que de laisser un écran figé.
+function showError(msg) {
+  const el = $('error');
+  if (!el) return;
+  el.hidden = false;
+  el.querySelector('code').textContent = String(msg).slice(0, 400);
+}
+addEventListener('error', e => showError(e.message));
+addEventListener('unhandledrejection', e => showError(e.reason?.message ?? e.reason));
 
+const SAVE_KEY = 'tennis-club-sim-save-v1';
+
+// --- Rendu ---------------------------------------------------------------------------------------
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// Qualité graphique : « haute » par défaut, « économie » pour les ordinateurs modestes.
+let quality = 'high';
+try { quality = localStorage.getItem('tennis-club-quality') || 'high'; } catch { /* stockage indisponible */ }
+function applyQuality() {
+  renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.85);
+  renderer.shadowMap.enabled = quality === 'high';
+  scene?.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
+  fit?.();
+}
+renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+$('game').appendChild(renderer.domElement);
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(62, 1, 0.3, 70000);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 600);
+scene.add(camera);
 function fit() {
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
-  camera.fov = camera.aspect < 1 ? 80 : 62;
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', fit);
-fit();
+applyQuality();
 
-// Laisse le navigateur afficher l'écran de chargement avant de générer la vallée.
-await new Promise(r => requestAnimationFrame(() => setTimeout(r, 30)));
-
-// Réglage allégé pour les téléphones et tablettes (ou en ajoutant #lite à l'adresse).
-const LITE = matchMedia('(pointer: coarse)').matches || location.hash === '#lite';
-if (LITE) { renderer.setPixelRatio(1); renderer.shadowMap.enabled = false; }
-
-const sky = createSky(renderer, scene);
-const terrain = createTerrain(scene, sky.sunDir, { lite: LITE });
-const air = createAir(TURNPOINTS);
-const clouds = createClouds(scene, air.thermals);
-const course = createCourse(scene);
-const glider = new Glider(scene);
+const interactables = [];
+const env = createEnvironment(scene, renderer);
+const building = createBuilding(scene, interactables);
+const audio = createAudio();
 const hud = createHud();
 const input = createInput(renderer.domElement);
-const audio = createAudio();
+const player = new Player(camera);
+player.yaw = 0;
 
-// --- État de la partie ----------------------------------------------------------------------
-const game = {
-  state: 'menu',         // menu | fly | ground | paused | end
-  time: 0, distance: 0, maxAlt: 0, bestClimb: 0,
-  camMode: 'chase',
-  warp: 1,
-  varioAvg: 0,
-  onField: false,
+// --- État de la partie (créé au lancement) --------------------------------------------------------------
+let club = null, shelves = null, courts = null, computer = null, payment = null;
+let colliders = staticColliders();
+const personViews = new Map();
+const boxViews = new Map();
+let mode = 'menu';           // menu | play | pause | summary
+const ui = { target: null, hint: '', progress: 0, held: null };
+
+function hasSave() { try { return !!localStorage.getItem(SAVE_KEY); } catch { return false; } }
+function save() {
+  if (!club) return false;
+  try { localStorage.setItem(SAVE_KEY, JSON.stringify(club.serialize())); return true; } catch { return false; }
+}
+function load() {
+  try {
+    const raw = localStorage.getItem(SAVE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    return s && s.version === 1 ? s : null;
+  } catch { return null; }
+}
+
+function rebuildColliders() {
+  colliders = staticColliders();
+  club.s.shelves.forEach((sh, i) => { if (sh.built) colliders.push(shelfCollider(SHELF_SLOTS[i])); });
+  for (const c of COURTS) if (club.s.courts[c.id].built) colliders.push(...courtColliders(c.id, COURT_TYPES[c.surface].sport));
+}
+
+function addBoxView(box) {
+  const m = boxMesh(box.product);
+  m.position.set(box.x, (box.y ?? 0) + m.userData.size[1] / 2, box.z);
+  m.rotation.y = (box.id * 1.7) % 0.4 - 0.2;
+  m.userData.interact = { kind: 'box', id: box.id };
+  scene.add(m);
+  interactables.push(m);
+  boxViews.set(box.id, m);
+}
+function removeBoxView(box) {
+  const m = boxViews.get(box.id);
+  if (!m) return;
+  if (player.held?.box === box) player.release();
+  m.parent?.remove(m);
+  const i = interactables.indexOf(m);
+  if (i >= 0) interactables.splice(i, 1);
+  boxViews.delete(box.id);
+}
+
+function completeObjective(id) {
+  if (!club || club.s.objectives.includes(id)) return;
+  club.s.objectives.push(id);
+  hud.objectives(club.s.objectives);
+}
+
+const hooks = {
+  spawnPerson(p) {
+    const v = createPersonView(p);
+    personViews.set(p.id, v);
+    v.root.position.set(p.x, 0, p.z);
+    scene.add(v.root);
+  },
+  despawnPerson(p) {
+    const v = personViews.get(p.id);
+    if (v) { scene.remove(v.root); personViews.delete(p.id); }
+  },
+  bubble(p, text, kind) { personViews.get(p.id)?.say(text, kind); },
+  shelfChanged(i) { shelves?.refresh(i); },
+  shelfBuilt(i) { shelves?.refresh(i); rebuildColliders(); hud.notify('Nouvelle étagère installée', 'good'); },
+  counterChanged(c) { building.showCounter(c); hud.checkout(c); },
+  boxAdded(box) { addBoxView(box); },
+  boxRemoved(box) { removeBoxView(box); },
+  boxMoved(box) {
+    const m = boxViews.get(box.id);
+    if (m) { m.position.set(box.x, (box.y ?? 0) + m.userData.size[1] / 2, box.z); }
+  },
+  courtChanged(id, built) { courts?.refresh(id); if (built) { rebuildColliders(); } },
+  courtSession(id, persons, start, sport) {
+    if (start) courts.startSession(id, persons, sport, p => personViews.get(p.id));
+    else courts.endSession(id);
+  },
+  notify(text, kind) { hud.notify(text, kind); audio.notify(); },
+  sound(name) {
+    audio[name]?.();
+    if (name === 'order') completeObjective('order');
+    if (name === 'cash' && atCounter()) completeObjective('serve');
+  },
+  levelUp(level, unlocks) {
+    audio.level();
+    showLevelUp(level, unlocks);
+    courts?.refreshAll();
+  },
+  dayEnded(summary) { showSummary(summary); },
+  openChanged(open) { building.setOpen(open); },
+  pricesChanged() { shelves?.invalidate(); },
+  upgradeBought(k) { hud.notify('Aménagement installé', 'good'); },
 };
 
-const START = { x: AIRFIELD.x + 250, z: AIRFIELD.z + 300, alt: AIRFIELD.h + 900 };
-
-// --- Caméra -----------------------------------------------------------------------------------
-const camQ = new THREE.Quaternion();
-const UP = new THREE.Vector3(0, 1, 0), RIGHT = new THREE.Vector3(1, 0, 0);
-let shake = 0;
-let yaw = 0;
-
-function reset() {
-  glider.place(START.x, START.alt, START.z, 0);
-  course.reset();
-  Object.assign(game, { time: 0, distance: 0, maxAlt: START.alt, bestClimb: 0, varioAvg: 0, warp: 1, onField: false });
-  camQ.copy(glider.quat);
-}
-
-function updateCamera(dt) {
-  const look = new THREE.Quaternion().setFromAxisAngle(UP, -input.lookX)
-    .multiply(new THREE.Quaternion().setFromAxisAngle(RIGHT, -input.lookY));
-  if (game.camMode === 'cockpit') {
-    camera.position.copy(new THREE.Vector3(0, 0.4, -2.05).applyQuaternion(glider.quat).add(glider.pos));
-    camera.quaternion.copy(glider.quat).multiply(look);
-    camera.near = 0.05;
-  } else {
-    // La caméra suit avec un léger retard et n'accompagne qu'en partie l'inclinaison.
-    camQ.slerp(glider.quat, 1 - Math.exp(-3.2 * dt));
-    const level = new THREE.Quaternion().setFromAxisAngle(UP, -glider.heading);
-    const q = camQ.clone().slerp(level, 0.35).multiply(look);
-    camera.position.copy(glider.pos).add(new THREE.Vector3(0, 2.8, 16).applyQuaternion(q));
-    const floor = Math.max(heightAt(camera.position.x, camera.position.z), WATER_LEVEL) + 1.5;
-    if (camera.position.y < floor) camera.position.y = floor;
-    camera.quaternion.copy(q).multiply(new THREE.Quaternion().setFromAxisAngle(RIGHT, -0.1));
-    camera.near = 0.3;
-  }
-  if (shake > 0) {
-    shake = Math.max(0, shake - dt);
-    camera.position.add(new THREE.Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).multiplyScalar(shake * 0.4));
-  }
-  // Turbulence légère, plus forte dans les thermiques et à grande vitesse.
-  const turb = game.state === 'fly' ? 0.002 + Math.abs(glider.lift) * 0.0015 + glider.speed * 0.00004 : 0;
-  camera.rotateZ((Math.random() - 0.5) * turb);
-  camera.updateProjectionMatrix();
-  glider.pilot.visible = game.camMode !== 'cockpit';
-  const inCockpit = game.camMode === 'cockpit' && game.state !== 'menu' && game.state !== 'end';
-  $('cockpit').hidden = !inCockpit;
-  if (inCockpit) {
-    // Le fil de laine sur la verrière : il part de travers quand le planeur dérape ou que l'air est agité.
-    yaw = damp(yaw, -glider.ail * 18 + (Math.random() - 0.5) * (4 + Math.abs(glider.lift) * 4), 6, dt);
-    $('yaw-string').setAttribute('d', `M500 42 q ${yaw * 0.4} 30 ${yaw} 70`);
-  }
-}
-
-// --- Écrans -----------------------------------------------------------------------------------
-function show(id) {
-  for (const s of ['menu', 'pause', 'end']) $(s).hidden = s !== id;
-  $('hud').hidden = !(id === null || id === 'pause');
-  input.enabled = id === null;
-  if (id) input.releaseAll();
-}
-
-let bannerTimer;
-function banner(title, sub = '', ms = 3500) {
-  $('banner-title').textContent = title;
-  $('banner-sub').textContent = sub;
-  const el = $('banner');
-  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
-  clearTimeout(bannerTimer);
-  bannerTimer = setTimeout(() => el.classList.remove('show'), ms);
-}
-
-const fmtTime = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
-const fmtKm = m => `${(m / 1000).toLocaleString('fr-FR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
-
-function start() {
+function startGame(state) {
+  club = new Club(state, hooks);
+  shelves = createShelves(scene, interactables, club.s);
+  courts = createCourts(scene, club.s, interactables, pos => audio.ball(pos.distanceTo(camera.position)));
+  for (const b of club.s.boxes) { b.held = false; addBoxView(b); }
+  club.syncStaff();
+  rebuildColliders();
+  building.setOpen(false);
+  building.showCounter(club.counter);
+  computer = createComputer(club, {
+    onClose: closeUi, sound: audio,
+    onEndDay: () => { closeUi(); if (club.canEndDay()) club.endDay(); },
+  });
+  payment = createPayment(club, {
+    sound: audio, onClose: closeUi, notify: (t, k) => hud.notify(t, k),
+  });
+  player.pos.set(0, 0, 19);
+  player.yaw = 0; player.pitch = -0.05;
+  hud.objectives(club.s.objectives);
+  mode = 'play';
+  $('menu').hidden = true;
+  $('hud').hidden = false;
   audio.init();
-  reset();
-  game.state = 'fly';
-  show(null);
-  banner(`Largage à ${Math.round(START.alt).toLocaleString('fr-FR')} m`, 'Cherche les thermiques sous les cumulus : quand le vario bipe, spirale !', 5500);
+  input.requestLock();
+  hud.notify(`Jour ${club.s.day} : le club ouvre à 8 h. Retourne la pancarte quand tu es prêt.`, 'info');
 }
 
-function finish(kind, title, text) {
-  game.state = 'end';
-  $('end-kicker').textContent = { win: 'Circuit bouclé', field: 'Atterrissage en campagne', crash: 'Accident', home: 'Retour au terrain' }[kind];
-  $('end-title').textContent = title;
-  $('end-text').textContent = text;
-  $('end-time').textContent = fmtTime(game.time);
-  $('end-dist').textContent = fmtKm(game.distance);
-  $('end-alt').textContent = `${Math.round(game.maxAlt).toLocaleString('fr-FR')} m`;
-  $('end-climb').textContent = `+${game.bestClimb.toFixed(1)} m/s`;
-  $('end-tps').textContent = `${course.state.next} / ${TURNPOINTS.length}`;
-  $('end').dataset.kind = kind;
-  if (kind === 'crash') shake = 1;
-  setTimeout(() => { if (game.state === 'end') show('end'); }, kind === 'crash' ? 1200 : 400);
+// --- Interfaces superposées ----------------------------------------------------------------------------
+function openUi(kind) {
+  input.uiOpen = true;
+  input.exitLock();
+  if (kind === 'computer') computer.open();
+  if (kind === 'card' || kind === 'cash') payment.open(kind);
+}
+function closeUi() {
+  computer?.close();
+  if (payment?.isOpen) payment.close();     // rappelle closeUi, sans effet la seconde fois
+  if (mode !== 'play') return;
+  input.uiOpen = false;
+  input.requestLock();
 }
 
-input.onKey = code => {
-  if (code === 'KeyC' && (game.state === 'fly' || game.state === 'ground')) {
-    game.camMode = game.camMode === 'chase' ? 'cockpit' : 'chase';
-  }
-  if ((code === 'KeyP' || code === 'Escape') && (game.state === 'fly' || game.state === 'paused')) {
-    game.state = game.state === 'paused' ? 'fly' : 'paused';
-    show(game.state === 'paused' ? 'pause' : null);
-  }
-  if (code === 'KeyT' && game.state === 'fly') game.warp = game.warp === 1 ? 3 : 1;
-  if (code === 'KeyM') $('btn-mute').textContent = audio.toggle() ? 'Son coupé' : 'Son';
+function showPause() {
+  if (mode !== 'play') return;
+  mode = 'pause';
+  input.uiOpen = true;
+  computer?.close();
+  $('pause').hidden = false;
+  $('save-status').textContent = '';
+}
+function resume() {
+  mode = 'play';
+  $('pause').hidden = true;
+  input.uiOpen = false;
+  input.requestLock();
+}
+
+function showLevelUp(level, unlocks) {
+  const el = $('levelup');
+  el.innerHTML = `<div><span>Niveau ${level}</span><b>Le club grandit !</b>${unlocks.length ? `<p>Débloqué : ${unlocks.join(' · ')}</p>` : ''}</div>`;
+  el.hidden = false;
+  el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+  clearTimeout(showLevelUp.t);
+  showLevelUp.t = setTimeout(() => { el.hidden = true; }, 5200);
+}
+
+function showSummary(s) {
+  mode = 'summary';
+  input.uiOpen = true;
+  input.exitLock();
+  computer?.close();
+  if (payment?.isOpen) payment.close();
+  const income = s.courts + s.shop + s.licenceFees;
+  const expenses = s.orders + s.build + s.salaries + s.upkeep;
+  const drift = s.licenceDrift;
+  $('summary').innerHTML = `<div class="sheet">
+    <p class="kicker">Fin de journée</p><h2>Bilan du jour ${s.day}</h2>
+    <div class="sum-grid">
+      <section><h3>Recettes</h3>
+        <dl><dt>Locations de terrains</dt><dd>${fmtMoney(s.courts)}</dd><dt>Boutique</dt><dd>${fmtMoney(s.shop)}</dd><dt>Licences</dt><dd>${fmtMoney(s.licenceFees)}</dd></dl>
+        <p class="total">${fmtMoney(income)}</p></section>
+      <section><h3>Dépenses</h3>
+        <dl><dt>Commandes</dt><dd>${fmtMoney(s.orders)}</dd><dt>Travaux</dt><dd>${fmtMoney(s.build)}</dd><dt>Salaires</dt><dd>${fmtMoney(s.salaries)}</dd><dt>Entretien et charges</dt><dd>${fmtMoney(s.upkeep)}</dd></dl>
+        <p class="total neg">−${fmtMoney(expenses)}</p></section>
+    </div>
+    <div class="sum-kpis">
+      <div><span>Résultat</span><b class="${income - expenses >= 0 ? 'pos' : 'neg'}">${income - expenses >= 0 ? '+' : ''}${fmtMoney(income - expenses)}</b></div>
+      <div><span>Clients</span><b>${s.customers}</b><small>${s.happy} satisfaits · ${s.angry} mécontents</small></div>
+      <div><span>Licenciés</span><b>${s.licences}</b><small>${s.newLicences} nouvelles licences${drift ? ` · ${drift > 0 ? '+' : ''}${drift} bouche-à-oreille` : ''}</small></div>
+      <div><span>Satisfaction</span><b>${(s.satisfaction * 5).toFixed(1)} / 5</b></div>
+    </div>
+    <button class="primary" id="btn-next-day">Jour suivant</button>
+    <p class="muted small" id="sum-save"></p>
+  </div>`;
+  $('summary').hidden = false;
+  $('sum-save').textContent = save() ? 'Partie sauvegardée.' : 'Sauvegarde impossible dans ce navigateur : la partie continue sans.';
+  $('btn-next-day').addEventListener('click', () => {
+    club.nextDay();
+    building.showCounter(club.counter);
+    hud.checkout(club.counter);
+    $('summary').hidden = true;
+    mode = 'play';
+    input.uiOpen = false;
+    input.requestLock();
+    save();
+    hud.notify(`Jour ${club.s.day} : bonne journée !`, 'info');
+  });
+}
+
+// --- Commandes du joueur ------------------------------------------------------------------------------
+function atCounter() { return player.pos.x > -9.8 && player.pos.x < -2.6 && player.pos.z > 3.8 && player.pos.z < 6.6; }
+
+input.onLockChange = (locked, reason) => {
+  if (reason === 'exit' && mode === 'play' && !input.uiOpen) showPause();
 };
-$('btn-start').addEventListener('click', start);
-$('btn-again').addEventListener('click', start);
-$('btn-resume').addEventListener('click', () => input.onKey('KeyP'));
-$('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? 'Son coupé' : 'Son'; e.currentTarget.blur(); });
 
-// --- Contact avec le sol ------------------------------------------------------------------------
-function touchdown() {
-  const { x, z } = glider.pos;
-  const ground = heightAt(x, z);
-  const vs = glider.vario, bank = Math.abs(glider.bank), sp = glider.speed;
-  const { slope } = gradientAt(x, z, 10);
-  const onField = Math.abs(x - AIRFIELD.x) < AIRFIELD.halfWidth + 40 && Math.abs(z - AIRFIELD.z) < AIRFIELD.halfLength + 80;
-
-  if (ground < WATER_LEVEL) return finish('crash', 'Amerrissage', 'Le planeur s\'est posé dans le lac. Le pilote nage jusqu\'à la rive, trempé mais indemne.');
-  if (forestAt(x, z) > 0.35 && !onField) return finish('crash', 'Dans les arbres', 'Pas de champ dégagé : le planeur finit dans la forêt. Garde toujours un champ à portée de plané.');
-  if (sp > 40 || vs < -3.5 || bank > 0.4 || slope > 0.2 || glider.pitch < -0.25) {
-    return finish('crash', 'Atterrissage brutal', `Contact à ${Math.round(sp * 3.6)} km/h avec ${vs.toFixed(1)} m/s de vitesse verticale. Arrive moins vite, ailes à plat, et arrondis juste avant le sol.`);
+input.onKey = (code) => {
+  if (code === 'Escape') {
+    if (mode === 'pause') return resume();
+    if (input.uiOpen && mode === 'play') return closeUi();
+    if (mode === 'play' && input.fallback) return showPause();
+    return;
   }
-  // Posé : le planeur roule jusqu'à l'arrêt.
-  game.state = 'ground';
-  game.onField = onField;
-  audio.thud();
-  shake = 0.4;
-}
+  if (mode !== 'play' || input.uiOpen) return;
+  if (code === 'KeyE') interact();
+  if (code === 'KeyG') dropHeld();
+  if (code === 'Tab') openUi('computer');
+  if (code === 'KeyM') { $('btn-mute').textContent = audio.toggle() ? 'Activer le son' : 'Couper le son'; }
+};
 
-function endRollout() {
-  if (game.onField && course.complete) finish('win', 'Circuit réalisé !', `Les ${TURNPOINTS.length} points de virage sont validés et tu t'es posé sur la piste.`);
-  else if (game.onField) finish('home', 'Posé au terrain', `Atterrissage réussi, mais il manque ${TURNPOINTS.length - course.state.next} point(s) de virage au circuit.`);
-  else finish('field', 'Aux vaches !', 'Atterrissage réussi dans un champ. L\'équipe va venir te chercher avec la remorque.');
-}
-
-// --- Simulation ----------------------------------------------------------------------------------
-function step(dt) {
-  air.advance(game.time);
-  const lift = air.sample(glider.pos.x, glider.pos.y, glider.pos.z);
-  const px = glider.pos.x, pz = glider.pos.z;
-  glider.update(dt, input, lift);
-  game.time += dt;
-  game.distance += Math.hypot(glider.pos.x - px, glider.pos.z - pz);
-  game.maxAlt = Math.max(game.maxAlt, glider.pos.y);
-
-  const tp = course.update(glider.pos);
-  if (tp) {
-    audio.chime();
-    banner(`${tp.name} validé`, course.complete ? 'Dernière étape : retour au terrain et atterrissage' : `Prochain point : ${course.target.name}`);
+input.onClick = (button, phase) => {
+  if (mode !== 'play' || input.uiOpen || phase !== 'down') return;
+  const t = ui.target;
+  if (!t) return;
+  const held = player.held?.box;
+  if (button === 'primary') {
+    if (held && t.kind === 'shelf') {
+      const r = club.placeItem(held, t.shelf, t.level);
+      if (r === 'ok') { audio.place(); completeObjective('shelf'); }
+      else if (r === 'full') { hud.notify('Cette tablette est pleine', 'bad'); audio.error(); }
+      else if (r === 'other') { hud.notify('Un autre produit est déjà rangé ici', 'bad'); audio.error(); }
+      else if (r === 'none') { hud.notify('Achète d\'abord cette étagère sur l\'ordinateur', 'bad'); audio.error(); }
+    } else if (t.kind === 'scan' && !t.done) club.scan(t.uid);
+    else if (t.kind === 'card' && club.counter.phase === 'pay' && club.counter.method === 'card') openUi('card');
+    else if (t.kind === 'cash' && club.counter.phase === 'pay' && club.counter.method === 'cash') openUi('cash');
+  } else if (button === 'secondary') {
+    if (held && t.kind === 'shelf') {
+      const r = club.takeItem(held, t.shelf, t.level);
+      if (r === 'ok') audio.pick();
+      else if (r === 'full') hud.notify('Le carton est plein', 'bad');
+    } else if (!held && t.kind === 'shelf') club.clearLevel(t.shelf, t.level);
   }
+};
 
-  const ground = Math.max(heightAt(glider.pos.x, glider.pos.z), WATER_LEVEL);
-  if (glider.pos.y - 0.45 <= ground) { glider.pos.y = ground + 0.45; touchdown(); }
+function interact() {
+  const t = ui.target;
+  if (!t) return;
+  if (t.kind === 'box' && !player.held) {
+    const box = club.s.boxes.find(b => b.id === t.id);
+    if (!box || !club.pickBox(box)) return;
+    const m = boxViews.get(box.id);
+    scene.remove(m);
+    // Le carton porté ne doit pas intercepter la visée.
+    const k = interactables.indexOf(m);
+    if (k >= 0) interactables.splice(k, 1);
+    player.hold(box, m);
+    audio.pick();
+    completeObjective('pick');
+  } else if (t.kind === 'laptop') openUi('computer');
+  else if (t.kind === 'sign') {
+    const open = club.toggleOpen();
+    audio.click();
+    if (open) { completeObjective('open'); hud.notify('Le club est ouvert : les premiers clients arrivent', 'good'); }
+  }
 }
 
-function rollout(dt) {
-  // Sur la roue, ailes à plat, le planeur freine jusqu'à l'arrêt.
-  glider.phi = damp(glider.phi, 0, 6, dt);
-  glider.theta = damp(glider.theta, 0, 6, dt);
-  glider.syncQuat();
-  glider.speed = Math.max(0, glider.speed - 4 * dt);
-  const dir = glider.forward.setY(0).normalize();
-  glider.pos.addScaledVector(dir, glider.speed * dt);
-  glider.pos.y = heightAt(glider.pos.x, glider.pos.z) + 0.45;
-  glider.vario = 0;
-  if (glider.speed <= 0.5) endRollout();
+function dropHeld() {
+  if (!player.held) return;
+  const h = player.held;
+  const p = player.floorPoint(2.2) ?? new THREE.Vector3(player.pos.x - Math.sin(player.yaw) * 0.9, 0, player.pos.z - Math.cos(player.yaw) * 0.9);
+  // On ne pose pas un carton dans un mur ou une étagère.
+  for (const b of colliders) if (p.x > b.minX - 0.3 && p.x < b.maxX + 0.3 && p.z > b.minZ - 0.3 && p.z < b.maxZ + 0.3) {
+    p.set(player.pos.x - Math.sin(player.yaw) * 0.7, 0, player.pos.z - Math.cos(player.yaw) * 0.7);
+    break;
+  }
+  player.release();
+  scene.add(h.mesh);
+  interactables.push(h.mesh);
+  h.mesh.rotation.set(0, player.yaw, 0);
+  club.dropBox(h.box, p.x, p.z, 0);
+  audio.place();
 }
 
-function warning(agl) {
-  if (game.state !== 'fly') return '';
-  if (glider.stalled) return 'Décrochage : rends la main';
-  if (glider.speed > V_NE) return 'Survitesse';
-  if (Math.hypot(glider.pos.x, glider.pos.z) > PLAY_RADIUS) return 'Hors zone : fais demi-tour';
-  if (agl < 150 && Math.hypot(glider.pos.x - AIRFIELD.x, glider.pos.z - AIRFIELD.z) > 1500) return 'Bas : choisis un champ';
-  return '';
+// Ce que vise le joueur, et l'aide affichée sous le viseur.
+function updateTarget(dt) {
+  ui.target = player.aim(interactables, 3.4);
+  const t = ui.target, held = player.held?.box;
+  ui.held = held ? { product: held.product, qty: held.qty } : null;
+  let hint = '';
+  const key = k => `<kbd>${k}</kbd>`;
+  if (t) {
+    if (t.kind === 'shelf') {
+      const lvl = club.s.shelves[t.shelf].levels[t.level];
+      const name = lvl.product ? `${PRODUCTS[lvl.product].short} · ${lvl.qty} / ${PRODUCTS[lvl.product].shelf}` : 'Emplacement libre';
+      if (held) {
+        if (lvl.product && lvl.product !== held.product && lvl.qty > 0) hint = `${name}<br><span class="warn">Un autre produit est rangé ici</span>`;
+        else hint = `${name}<br>${key('Clic gauche')} Ranger · ${key('Clic droit')} Reprendre`;
+      } else hint = lvl.product && lvl.qty === 0 ? `${name}<br>${key('Clic droit')} Retirer l'étiquette` : name;
+    } else if (t.kind === 'box' && !held) {
+      const box = club.s.boxes.find(b => b.id === t.id);
+      if (box) hint = `${key('E')} Prendre le carton · ${PRODUCTS[box.product].short} (${box.qty})`;
+    } else if (t.kind === 'laptop') hint = `${key('E')} Utiliser l'ordinateur`;
+    else if (t.kind === 'sign') hint = `${key('E')} ${club.s.open ? 'Fermer le club' : 'Ouvrir le club'}`;
+    else if (t.kind === 'scan' && !t.done) hint = `${key('Clic')} Scanner l'article`;
+    else if (t.kind === 'card') hint = club.counter.phase === 'pay' && club.counter.method === 'card' ? `${key('Clic')} Encaisser par carte` : 'Terminal de paiement';
+    else if (t.kind === 'cash') hint = club.counter.phase === 'pay' && club.counter.method === 'cash' ? `${key('Clic')} Ouvrir le tiroir-caisse` : 'Tiroir-caisse';
+    else if (t.kind === 'court') {
+      const st = club.s.courts[t.court];
+      if (!club.canClean(t.court)) hint = 'Partie en cours';
+      else if (st.wear > 0.02) hint = `${key('Maintenir E')} Brosser le terrain · usure ${(st.wear * 100).toFixed(0)} %`;
+      else hint = 'Terrain impeccable';
+    }
+  }
+  // Brossage : maintenir E en visant un terrain.
+  if (t?.kind === 'court' && input.down('KeyE') && club.canClean(t.court) && club.s.courts[t.court].wear > 0.02) {
+    ui.progress += dt / 2.8;
+    audio.brushing(true);
+    if (ui.progress >= 1) { club.clean(t.court); ui.progress = 0; audio.brushing(false); audio.place(); completeObjective('clean'); hud.notify('Terrain brossé', 'good'); }
+  } else { ui.progress = 0; audio.brushing(false); }
+  ui.hint = hint;
 }
 
-// Cap et distance vers le prochain point (ou le terrain), et marge pour rentrer en plané.
-function navInfo() {
-  const target = course.target ?? { name: 'Terrain', x: AIRFIELD.x, z: AIRFIELD.z };
-  const dx = target.x - glider.pos.x, dz = target.z - glider.pos.z;
-  const home = Math.hypot(AIRFIELD.x - glider.pos.x, AIRFIELD.z - glider.pos.z);
-  const margin = glider.pos.y - (AIRFIELD.h + 150 + home / 25);   // finesse de sécurité 25
-  return {
-    navLabel: course.target ? `Point ${course.state.next + 1} / ${TURNPOINTS.length}` : 'Retour',
-    navName: target.name,
-    navDist: fmtKm(Math.hypot(dx, dz)),
-    navRel: Math.atan2(dx, -dz) - glider.heading,
-    glideText: `Marge retour terrain : ${margin >= 0 ? '+' : ''}${Math.round(margin)} m`,
-  };
+// --- Écran titre -----------------------------------------------------------------------------------------
+$('btn-new').addEventListener('click', () => {
+  if (hasSave() && !confirmNew()) return;
+  startGame(createState());
+});
+function confirmNew() {
+  const btn = $('btn-new');
+  if (btn.dataset.confirm) return true;
+  btn.dataset.confirm = '1';
+  btn.textContent = 'Écraser la sauvegarde ?';
+  setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = 'Nouvelle partie'; }, 3000);
+  return false;
 }
+$('btn-continue').addEventListener('click', () => { const s = load(); if (s) startGame(s); });
+$('btn-continue').hidden = !hasSave();
+$('btn-resume').addEventListener('click', resume);
+$('btn-save').addEventListener('click', () => { $('save-status').textContent = save() ? 'Partie sauvegardée.' : 'Sauvegarde impossible dans ce navigateur.'; });
+$('btn-quit').addEventListener('click', () => { save(); location.reload(); });
+$('click-to-play').addEventListener('click', () => input.requestLock());
+$('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? 'Activer le son' : 'Couper le son'; });
+const qBtn = $('btn-quality');
+const qLabel = () => { qBtn.textContent = quality === 'high' ? 'Graphismes : haute qualité' : 'Graphismes : mode économie'; };
+qLabel();
+qBtn.addEventListener('click', () => {
+  quality = quality === 'high' ? 'low' : 'high';
+  try { localStorage.setItem('tennis-club-quality', quality); } catch { /* rien */ }
+  applyQuality(); qLabel();
+});
 
-// --- Boucle ------------------------------------------------------------------------------------
+// --- Boucle -----------------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
-let elapsed = 0;
+let menuT = 0, birdT = 4, stepPhase = 0;
 
 function tick() {
-  const realDt = Math.min(clock.getDelta(), 0.05);
-  elapsed += realDt;
-  input.poll(realDt);
-
-  if (game.state === 'fly') {
-    const total = realDt * game.warp;
-    const n = Math.ceil(total / 0.02);
-    for (let i = 0; i < n && game.state === 'fly'; i++) step(total / n);
-    game.bestClimb = Math.max(game.bestClimb, glider.vario);
-    game.varioAvg = damp(game.varioAvg, glider.vario, 1 / 20, total);   // intégrateur ~20 s
-  } else if (game.state === 'ground') {
-    rollout(realDt);
-    game.time += realDt;
-  } else if (game.state === 'menu') {
-    // Démonstration derrière le menu : le planeur spirale tranquillement.
-    glider.update(realDt, { pitch: 0, roll: 0.3, brake: false }, 0);
-    glider.pos.y = START.alt;
+  const dt = Math.min(clock.getDelta(), 0.05);
+  if (mode === 'menu') {
+    // Plan large autour du club derrière l'écran titre.
+    menuT += dt * 0.05;
+    camera.position.set(Math.sin(menuT) * 26, 7 + Math.sin(menuT * 0.7) * 1.5, 30 + Math.cos(menuT) * 8);
+    camera.lookAt(0, 2, 4);
+    env.setTime(10.5 * 60 + Math.sin(menuT) * 30, new THREE.Vector3(0, 0, 5));
+  } else {
+    if (mode === 'play') {
+      club.update(dt, { playerAtCounter: atCounter() });
+      player.update(dt, input, colliders, WORLD);
+      updateTarget(dt);
+      // Pas et oiseaux.
+      if (Math.floor(player.stepPhase / Math.PI) !== stepPhase) { stepPhase = Math.floor(player.stepPhase / Math.PI); audio.step(); }
+      birdT -= dt;
+      if (birdT <= 0) { birdT = 5 + Math.random() * 12; if (club.s.minute < 20 * 60 && (player.pos.z < 0 || player.pos.z > 14)) audio.bird(); }
+    }
+    for (const p of club.persons) personViews.get(p.id)?.update(dt, p);
+    courts.update(dt);
+    building.animateCounter(dt);
+    player.animateHeld(dt);
+    const { night } = env.setTime(club.s.minute, player.pos);
+    building.update(club.s.minute, night);
+    courts.setNight(night > 0.35 && club.s.upgrades.lights);
+    hud.update(club, ui);
+    $('click-to-play').hidden = input.locked || input.fallback || mode !== 'play' || input.uiOpen;
+    $('look-help').hidden = !(input.fallback && mode === 'play' && !input.uiOpen);
   }
-
-  const agl = glider.pos.y - Math.max(heightAt(glider.pos.x, glider.pos.z), WATER_LEVEL);
-  if (game.state !== 'menu') {
-    hud.update(glider, {
-      varioAvg: game.varioAvg, agl,
-      groundSpeed: Math.hypot(glider.forward.x * glider.speed + WIND.x, glider.forward.z * glider.speed + WIND.z),
-      timeText: fmtTime(game.time), warp: game.warp, course: course.state,
-      warning: warning(agl), ...navInfo(),
-    });
-  }
-  audio.update(glider.speed, glider.vario, game.state === 'fly', glider.stalled);
-
-  updateCamera(realDt);
-  sky.follow(glider.pos);
-  terrain.update(elapsed);
-  course.animate(elapsed);
-  if (game.state === 'menu') air.advance(0);
-  clouds.userData.update();
   renderer.render(scene, camera);
 }
-
-reset();
-show('menu');
 renderer.setAnimationLoop(tick);
 $('loading').hidden = true;
 
-// Accès depuis la console pour tester (ex. __jeu.glider.pos.y = 2500).
-window.__jeu = { game, glider, course, air, start, camera, banner, AIRFIELD, heightAt };
+// Accès pour les tests automatisés et la console.
+window.__club = { get club() { return club; }, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld };

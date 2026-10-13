@@ -3,131 +3,99 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <title>Ascendance</title>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&display=swap" />
+  <title>Tennis Club Simulator</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&display=swap" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
   <div id="game"></div>
 
-  <!-- Vue depuis la place du pilote : casquette du tableau de bord et fil de laine -->
-  <div id="cockpit" hidden><svg viewBox="0 0 1000 600" preserveAspectRatio="none" aria-hidden="true">
-    <defs>
-      <linearGradient id="shield" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0" stop-color="#2a2e33" /><stop offset="1" stop-color="#0c0e10" />
-      </linearGradient>
-    </defs>
-    <path d="M0 600 L0 470 C220 400 380 388 500 388 C620 388 780 400 1000 470 L1000 600 Z" fill="url(#shield)" />
-    <path d="M0 470 C220 400 380 388 500 388 C620 388 780 400 1000 470" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="2" />
-    <path id="yaw-string" d="M500 42 q 0 30 0 70" fill="none" stroke="#d63b2f" stroke-width="3" stroke-linecap="round" vector-effect="non-scaling-stroke" />
-  </svg></div>
-
-  <!-- Tableau de bord -->
+  <!-- Interface de jeu -->
   <div id="hud" hidden>
-    <div id="nav" class="glass">
-      <div class="nav-top">
-        <span id="nav-label" class="kicker">Point 1 / 3</span>
-        <span class="clock"><span id="timer">0:00</span><span id="warp" class="chip" hidden>×3</span></span>
+    <div class="hud-left">
+      <div class="money" id="hud-money">0,00 €</div>
+      <div class="hud-row">
+        <div class="level"><span class="lvl" id="hud-level">1</span><div class="xp"><i id="hud-xp"></i></div></div>
       </div>
-      <div class="nav-main">
-        <svg id="nav-arrow" viewBox="0 0 40 40" aria-hidden="true"><path d="M20 3 L31 33 L20 26 L9 33 Z" /></svg>
-        <div>
-          <div id="nav-name" class="nav-name">Pic de l'Aigle</div>
-          <div id="nav-dist" class="nav-dist">0,0 km</div>
-        </div>
+      <div class="hud-row">
+        <span class="chip"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="hud-licences">0</span> licenciés</span>
+        <span class="stars" id="hud-stars" title="Satisfaction des clients"></span>
       </div>
-      <div id="nav-glide" class="nav-glide"></div>
+    </div>
+    <div class="hud-right">
+      <div class="clock"><span id="hud-day">Jour 1</span><b id="hud-clock">08:00</b></div>
+      <span class="status closed" id="hud-status">Fermé</span>
     </div>
 
-    <div id="side">
-      <canvas id="map" width="190" height="190" aria-label="Carte du circuit"></canvas>
-      <dl class="readouts glass">
-        <dt>Hauteur sol</dt><dd id="agl">0 m</dd>
-        <dt>Vitesse sol</dt><dd id="gs">0 km/h</dd>
-      </dl>
-    </div>
-
-    <div id="panel" class="glass">
-      <figure><canvas id="asi" width="132" height="132"></canvas><figcaption>Anémomètre</figcaption></figure>
-      <figure><canvas id="vario" width="132" height="132"></canvas><figcaption>Variomètre</figcaption></figure>
-      <figure><canvas id="alt" width="132" height="132"></canvas><figcaption>Altimètre</figcaption></figure>
-    </div>
-
-    <div id="warning" hidden></div>
-    <div id="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
-
-    <div id="keys" class="glass">
-      <span><kbd>C</kbd> caméra</span><span><kbd>T</kbd> accélérer</span><span><kbd>P</kbd> pause</span>
-      <button id="btn-mute" type="button">Son</button>
-    </div>
-
-    <div id="touch">
-      <div id="stick" hidden><div id="knob"></div></div>
-      <button id="btn-brake" type="button">Aérofreins</button>
-      <button id="btn-cam" type="button">Caméra</button>
-    </div>
+    <div id="crosshair"></div>
+    <div id="hint" hidden></div>
+    <div id="progress" hidden></div>
+    <div id="held" hidden></div>
+    <div id="checkout" hidden></div>
+    <div id="objectives" hidden></div>
+    <div id="toasts"></div>
+    <div id="levelup" hidden></div>
+    <div class="keys"><kbd>E</kbd> interagir <kbd>Tab</kbd> ordinateur <kbd>G</kbd> poser <kbd>Maj</kbd> courir <kbd>Échap</kbd> pause</div>
   </div>
 
-  <!-- Écran titre -->
-  <section id="menu" class="screen">
-    <div class="sheet">
-      <p class="kicker">Vol à voile · Alpes du Sud</p>
-      <h1>Ascendance</h1>
-      <p class="lede">Pas de moteur : seulement l'air qui monte. Repère les thermiques sous les cumulus,
-        enroule-les pour prendre de l'altitude, contourne les trois points de virage et reviens te poser sur la piste.</p>
-      <div class="cols">
-        <dl class="controls">
-          <dt>↑ / Z / W</dt><dd>Piquer (pousser le manche)</dd>
-          <dt>↓ / S</dt><dd>Cabrer (tirer le manche)</dd>
-          <dt>← → / Q D</dt><dd>Incliner pour virer</dd>
-          <dt>Espace</dt><dd>Aérofreins</dd>
-          <dt>Souris</dt><dd>Glisser pour regarder</dd>
-          <dt>C · T · P</dt><dd>Caméra · temps ×3 · pause</dd>
-        </dl>
-        <ul class="tips">
-          <li><b>Le variomètre bipe</b> quand tu montes : serre le virage pour rester dans l'ascendance.</li>
-          <li><b>Le vent d'ouest</b> fait monter l'air le long des versants exposés.</li>
-          <li><b>Vise 90 à 100 km/h</b> : c'est la vitesse de meilleur plané.</li>
-          <li><b>Pour atterrir</b> : vers 90 km/h, ailes à plat, descente douce, sur un terrain plat sans arbres.</li>
-        </ul>
-      </div>
-      <button id="btn-start" class="primary" type="button">Décoller</button>
-    </div>
-  </section>
+  <button id="click-to-play" hidden>Clique pour reprendre</button>
+  <div id="look-help" hidden>Ton navigateur ne permet pas de capturer la souris ici : maintiens le clic droit et glisse pour regarder autour.</div>
 
-  <section id="pause" class="screen" hidden>
+  <!-- Ordinateur, paiement, pause, bilan -->
+  <section id="computer" class="overlay" hidden></section>
+  <section id="payment" class="overlay" hidden></section>
+
+  <section id="pause" class="overlay" hidden>
     <div class="sheet small">
       <p class="kicker">Pause</p>
-      <h2>Le temps est suspendu</h2>
-      <button id="btn-resume" class="primary" type="button">Reprendre le vol</button>
-    </div>
-  </section>
-
-  <section id="end" class="screen" hidden>
-    <div class="sheet small">
-      <p id="end-kicker" class="kicker"></p>
-      <h2 id="end-title"></h2>
-      <p id="end-text" class="lede"></p>
-      <dl class="stats">
-        <div><dt>Durée</dt><dd id="end-time"></dd></div>
-        <div><dt>Distance</dt><dd id="end-dist"></dd></div>
-        <div><dt>Points validés</dt><dd id="end-tps"></dd></div>
-        <div><dt>Altitude max</dt><dd id="end-alt"></dd></div>
-        <div><dt>Meilleure montée</dt><dd id="end-climb"></dd></div>
+      <h2>Le club t'attend</h2>
+      <div class="stack">
+        <button class="primary" id="btn-resume">Reprendre</button>
+        <button class="ghost" id="btn-save">Sauvegarder</button>
+        <button class="ghost" id="btn-mute">Couper le son</button>
+        <button class="ghost" id="btn-quality">Graphismes : haute qualité</button>
+        <button class="ghost" id="btn-quit">Sauvegarder et quitter</button>
+      </div>
+      <p class="muted small" id="save-status"></p>
+      <dl class="controls">
+        <dt>Z Q S D</dt><dd>Se déplacer (W A S D en QWERTY)</dd>
+        <dt>Souris</dt><dd>Regarder</dd>
+        <dt>E</dt><dd>Prendre un carton, ouvrir l'ordinateur, la pancarte · maintenir pour brosser un terrain</dd>
+        <dt>Clic gauche</dt><dd>Ranger un article, scanner, encaisser</dd>
+        <dt>Clic droit</dt><dd>Reprendre un article dans le carton</dd>
+        <dt>G</dt><dd>Poser le carton</dd>
+        <dt>Tab</dt><dd>Ordinateur (depuis n'importe où)</dd>
       </dl>
-      <button id="btn-again" class="primary" type="button">Nouveau vol</button>
     </div>
   </section>
 
-  <div id="loading">Génération de la vallée…</div>
+  <section id="summary" class="overlay" hidden></section>
+
+  <!-- Écran titre -->
+  <section id="menu">
+    <div class="menu-card">
+      <p class="kicker">Simulation de gestion</p>
+      <h1>Tennis Club<br><span>Simulator</span></h1>
+      <p class="lede">Reprends le petit club des Platanes : un seul court en terre battue, deux étagères vides et douze licenciés.
+        Commande le matériel, remplis la boutique, encaisse les joueurs, entretiens les terrains, et fais grandir le club jusqu'au padel.</p>
+      <div class="stack">
+        <button class="primary" id="btn-new">Nouvelle partie</button>
+        <button class="ghost" id="btn-continue" hidden>Continuer</button>
+      </div>
+      <dl class="controls">
+        <dt>Z Q S D + souris</dt><dd>Se déplacer et regarder</dd>
+        <dt>E</dt><dd>Interagir (maintenir pour brosser)</dd>
+        <dt>Clics</dt><dd>Ranger, scanner, encaisser</dd>
+        <dt>Tab</dt><dd>Ordinateur du club</dd>
+      </dl>
+    </div>
+  </section>
+
+  <div id="loading">Préparation du club…</div>
+  <div id="error" hidden><b>Oups, une erreur est survenue.</b><span>Recharge la page ; ta dernière sauvegarde est conservée. Détail :</span><code></code></div>
 
   <script type="importmap">
-    {
-      "imports": {
-        "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-        "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-      }
-    }
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
   </script>
   <script type="module" src="src/main.js"></script>
 </body>
