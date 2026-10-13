@@ -3,12 +3,17 @@
   "private": true,
   "description": "Jeu de gestion de club de tennis et de padel en 3D, à la première personne.",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --outfile=jeu.js",
+    "build": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --loader:.glb=binary --loader:.jpg=binary --outfile=jeu.js",
     "start": "python3 -m http.server 8000",
-    "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs"
+    "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs",
+    "assets": "node tools/optimize-assets.mjs"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/extensions": "^4.1.0",
+    "@gltf-transform/functions": "^4.1.0",
     "esbuild": "0.24.0",
-    "three": "0.160.0"
+    "meshoptimizer": "^0.21.0",
+    "three": "^0.170.0"
   }
 }

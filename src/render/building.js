@@ -391,6 +391,14 @@ export function createBuilding(scene, interactables) {
   let lastClock = -1;
   return {
     showCounter, animateCounter,
+    // Parquet photographié (couleur, relief, rugosité) à la place du parquet dessiné.
+    setFloor(wood) {
+      for (const t of [wood.map, wood.bump, wood.rough]) t.repeat.set(W / 2.6, D / 2.6);
+      const m = floor.material;
+      m.map = wood.map; m.bumpMap = wood.bump; m.bumpScale = 0.6; m.roughnessMap = wood.rough; m.roughness = 1;
+      m.color.set(0xeadfd2);
+      m.needsUpdate = true;
+    },
     setOpen: open => openSign.redraw(open),
     setTerminal: text => termScreen.redraw(text),
     update(minute, night) {

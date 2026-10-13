@@ -105,11 +105,11 @@ export class Club {
   }
 
   // ---------------------------------------------------------------------------------- personnes
-  spawnPerson(role, at = SPAWN) {
+  spawnPerson(role, at = SPAWN, extra = {}) {
     const p = {
       id: this.id(), role, x: at.x + rand(-1.5, 1.5), z: at.z + rand(-0.5, 0.5), rot: Math.PI,
       speed: WALK_SPEED * rand(0.88, 1.12), path: [], action: 'idle', look: null, seed: Math.random(),
-      holdsRacket: false,
+      holdsRacket: false, ...extra,
     };
     this.persons.push(p);
     this.h.spawnPerson(p);
@@ -169,9 +169,8 @@ export class Club {
     cust.wants = cust.wants.filter(w => w && this.unlocked(PRODUCTS[w].level));
     cust.wants = [...new Set(cust.wants)];
     for (let i = 0; i < size; i++) {
-      const p = this.spawnPerson(i === 0 ? 'leader' : 'partner', { x: SPAWN.x + i * 0.7, z: SPAWN.z + i * 0.5 });
-      p.cust = cust;
-      p.holdsRacket = kind === 'book';
+      // La raquette doit être connue avant la création du personnage (le rendu la place dans sa main).
+      const p = this.spawnPerson(i === 0 ? 'leader' : 'partner', { x: SPAWN.x + i * 0.7, z: SPAWN.z + i * 0.5 }, { cust, holdsRacket: kind === 'book' });
       this.goTo(p, [FRONT_OUT, { x: FRONT_IN.x + rand(-0.6, 0.6), z: FRONT_IN.z + rand(-0.3, 0.3) }]);
       cust.persons.push(p);
     }

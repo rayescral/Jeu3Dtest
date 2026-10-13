@@ -1,209 +1,367 @@
-// Personnages : corps lisses et stylisés, tenues variées, animations (marche, jeu, coup droit,
-// regard vers les rayons, brossage) et bulles de pensée au-dessus de la tête.
+// Personnages : corps humain animé en capture de mouvement (X Bot, Mixamo), habillé par zones
+// (polo, short ou jupe, chaussettes, chaussures, peau), cheveux et visage, raquette dans la main droite.
+// Animations : repos, marche, course (capture), plus postures de jeu, coup droit, regard vers les rayons
+// et brossage, ajoutés par-dessus. Bulles de pensée au-dessus de la tête.
 import * as THREE from 'three';
+import { clone as cloneSkinned } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { racketMesh } from './products.js';
 import { damp, dampAngle, clamp } from '../core/util.js';
 
-const SKIN = [0xf3d2b3, 0xe8b894, 0xc98e66, 0x9c6644, 0x6e4630, 0xf7dcc5];
-const HAIR = [0x2b1d14, 0x5a3a22, 0x8c6239, 0xd8b26a, 0x1a1a1a, 0xa0522d, 0xc9c9c9];
-const TOPS = [0xffffff, 0x1f6b4a, 0x2f6fe0, 0xe04a4a, 0xf2c94c, 0x7a4fd6, 0x15171a, 0xff8a3d, 0x3fb7a6, 0xf4a3b8];
-const BOTTOMS = [0xffffff, 0x1b2a44, 0x15171a, 0x3a4048, 0x2a4f7a];
+const SKIN = [0xf1c9a5, 0xe0ac87, 0xc68863, 0x9a6440, 0x6b432a, 0xf6d8bf];
+const HAIR = [0x2a1c12, 0x4b3020, 0x7a5232, 0xc9a25a, 0x161616, 0x8a3c1c, 0xb9b4ac];
+const TOPS = [0xffffff, 0x1f6b4a, 0x2f6fe0, 0xd94545, 0xf2c94c, 0x7a4fd6, 0x1c1f24, 0xff8a3d, 0x3fb7a6, 0xf4a3b8, 0x9ad0ff];
+const BOTTOMS = [0xffffff, 0x1b2a44, 0x16181c, 0x3a4048, 0x2a4f7a, 0xf2f2f2];
+const SHOES = [0xf4f4f0, 0xf4f4f0, 0xe8e8e8, 0x1c1f24, 0x2f6fe0];
+
+const CURL = 1;
+let BASE = null;   // { scene, clips, height, cuts }
+
+// Position de chaque sommet dans la pose de repos (en T, en mètres) : sert à découper les vêtements
+// par des lignes nettes (manches, col, taille, short, chaussettes) calculées dans le fragment shader.
+function bindAttribute(mesh) {
+  const pos = mesh.geometry.attributes.position;
+  const out = new Float32Array(pos.count * 3), v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    v.fromBufferAttribute(pos, i);
+    mesh.applyBoneTransform(i, v);
+    v.applyMatrix4(mesh.matrixWorld);
+    v.toArray(out, i * 3);
+  }
+  mesh.geometry.setAttribute('aBind', new THREE.BufferAttribute(out, 3));
+}
+
+// Matériau habillé : un seul programme partagé, des couleurs et coupes propres à chaque personne.
+// Couleurs : 0 peau, 1 haut, 2 bas, 3 chaussettes, 4 chaussures.
+function outfitMaterial(colors, cut) {
+  const m = new THREE.MeshStandardMaterial({ roughness: 0.62, metalness: 0 });
+  const uniforms = {
+    uColors: { value: colors.map(c => new THREE.Color(c)) },
+    uCutA: { value: new THREE.Vector4(cut.neck, cut.sleeve, cut.waist, cut.shorts) },
+    uCutB: { value: new THREE.Vector4(cut.sock, cut.shoe, cut.wrist, 0) },
+  };
+  m.userData.uniforms = uniforms;
+  m.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, uniforms);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 aBind;\nvarying vec3 vBind;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvBind = aBind;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uColors[5];\nuniform vec4 uCutA;\nuniform vec4 uCutB;\nvarying vec3 vBind;')
+      .replace('#include <color_fragment>', `#include <color_fragment>
+        float by = vBind.y, bx = abs(vBind.x);
+        int zone = 0;
+        if (bx > uCutB.z) zone = 0;
+        else if (by > uCutA.x) zone = 0;
+        else if (bx > uCutA.y) zone = 0;
+        else if (by > uCutA.z) zone = 1;
+        else if (by > uCutA.w) zone = 2;
+        else if (by > uCutB.x) zone = 0;
+        else if (by > uCutB.y) zone = 3;
+        else zone = 4;
+        vec3 rc = zone == 0 ? uColors[0] : zone == 1 ? uColors[1] : zone == 2 ? uColors[2] : zone == 3 ? uColors[3] : uColors[4];
+                diffuseColor.rgb *= rc;`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor = zone == 4 ? 0.38 : zone == 0 ? 0.5 : 0.82;`);
+  };
+  m.customProgramCacheKey = () => 'outfit2';
+  return m;
+}
+
+export function initPeople(assets) {
+  const gltf = assets.xbot;
+  const scene = gltf.scene;
+  scene.updateMatrixWorld(true);
+  // Repères de la pose de repos, en mètres.
+  const P = n => scene.getObjectByName('mixamorig' + n).getWorldPosition(new THREE.Vector3());
+  const hips = P('Hips'), spine = P('Spine1'), neck = P('Neck'), head = P('Head'), top = P('HeadTop_End');
+  const knee = P('LeftLeg'), ankle = P('LeftFoot'), arm = P('LeftArm'), fore = P('LeftForeArm'), hand = P('LeftHand');
+  scene.traverse(o => { if (o.isSkinnedMesh) { bindAttribute(o); o.frustumCulled = false; } });
+  // Volume de la tête et largeur des hanches, mesurés sur le maillage.
+  const headBox = new THREE.Box3(), v = new THREE.Vector3();
+  let hipW = 0;
+  const bind = scene.getObjectByName('Beta_Surface').geometry.attributes.aBind;
+  const headFrom = neck.y + (head.y - neck.y) * 0.6;
+  for (let i = 0; i < bind.count; i++) {
+    v.fromBufferAttribute(bind, i);
+    if (v.y > headFrom) headBox.expandByPoint(v);
+    if (Math.abs(v.y - hips.y) < 0.04 && Math.abs(v.x) < 0.3) hipW = Math.max(hipW, Math.abs(v.x));
+  }
+  BASE = {
+    headBox, hipW,
+    scene, clips: Object.fromEntries(gltf.animations.map(c => [c.name, c])), height: top.y,
+    marks: { hips, spine, neck, head, knee, ankle, arm, fore, hand },
+  };
+}
+
+// Coupes de vêtements, en mètres dans la pose de repos.
+function cutsFor(look) {
+  const m = BASE.marks;
+  const shorts = look.pants ? m.ankle.y + 0.06 : look.skirt ? m.knee.y + (m.hips.y - m.knee.y) * 0.5 : m.knee.y + (m.hips.y - m.knee.y) * 0.32;
+  return {
+    neck: m.neck.y + (m.head.y - m.neck.y) * 0.15,
+    sleeve: look.longSleeve ? Math.abs(m.hand.x) - 0.03 : Math.abs(m.arm.x) + (Math.abs(m.fore.x) - Math.abs(m.arm.x)) * 0.42,
+    wrist: Math.abs(m.hand.x) - 0.02,
+    waist: m.hips.y + (m.spine.y - m.hips.y) * 0.15,
+    shorts,
+    sock: look.pants ? m.ankle.y + 0.059 : m.ankle.y + (m.knee.y - m.ankle.y) * 0.24,
+    shoe: m.ankle.y + 0.025,
+  };
+}
 
 const geo = {};
-const mats = new Map();
+const matCache = new Map();
 const mat = (color, rough = 0.7) => {
   const k = color + ':' + rough;
-  if (!mats.has(k)) mats.set(k, new THREE.MeshStandardMaterial({ color, roughness: rough }));
-  return mats.get(k);
+  if (!matCache.has(k)) matCache.set(k, new THREE.MeshStandardMaterial({ color, roughness: rough }));
+  return matCache.get(k);
 };
 
-function limb(len, r, material) {
-  geo['cap' + len + r] ??= new THREE.CapsuleGeometry(r, len, 6, 14).translate(0, -len / 2 - r * 0.3, 0);
-  const m = new THREE.Mesh(geo['cap' + len + r], material);
-  m.castShadow = true;
-  return m;
+// Cheveux, yeux, sourcils et éventuellement casquette ou bandeau, construits dans le repère du corps
+// (y vers le haut, z vers l'avant), centrés sur la tête mesurée, puis accrochés à l'os de la tête.
+function dressHead(look) {
+  const g = new THREE.Group();
+  const size = BASE.headBox.getSize(new THREE.Vector3());
+  const rx = size.x / 2, ry = size.y / 2, rz = size.z / 2;
+  const hair = mat(look.hair, 0.85);
+  // Calotte : demi-sphère un peu plus grande que le crâne, basculée vers l'arrière.
+  const cap = new THREE.Mesh(geo.hairCap ??= new THREE.SphereGeometry(1, 32, 18, 0, Math.PI * 2, 0, Math.PI * 0.5), hair);
+  cap.scale.set(rx * 1.07, ry * 1.04, rz * 1.08);
+  cap.position.set(0, ry * 0.02, -rz * 0.05);
+  cap.rotation.x = -0.22;
+  cap.castShadow = true;
+  g.add(cap);
+  if (look.long) {
+    const back = new THREE.Mesh(geo.hairBack ??= new THREE.SphereGeometry(1, 24, 16), hair);
+    back.scale.set(rx * 1.02, ry * 1.05, rz * 0.55);
+    back.position.set(0, -ry * 0.35, -rz * 0.55);
+    back.castShadow = true;
+    g.add(back);
+  }
+  if (look.ponytail) {
+    const tail = new THREE.Mesh(geo.tail ??= new THREE.CapsuleGeometry(0.03, 0.13, 4, 10), hair);
+    tail.position.set(0, -ry * 0.1, -rz * 1.2); tail.rotation.x = 0.5;
+    tail.castShadow = true;
+    g.add(tail);
+  }
+  // Yeux et sourcils sur l'avant du visage.
+  const eyeMat = mat(0x1a1a1a, 0.25), whiteMat = mat(0xf4f4f0, 0.3);
+  for (const sd of [-1, 1]) {
+    const ex = sd * rx * 0.36, ey = -ry * 0.12, ez = rz * 0.88;
+    const white = new THREE.Mesh(geo.eyeW ??= new THREE.SphereGeometry(1, 14, 10), whiteMat);
+    white.scale.set(0.014, 0.0095, 0.006); white.position.set(ex, ey, ez);
+    const pupil = new THREE.Mesh(geo.eyeP ??= new THREE.SphereGeometry(1, 12, 8), eyeMat);
+    pupil.scale.set(0.007, 0.007, 0.004); pupil.position.set(ex, ey, ez + 0.004);
+    const brow = new THREE.Mesh(geo.brow ??= new THREE.BoxGeometry(0.032, 0.0055, 0.008), hair);
+    brow.position.set(ex, ey + 0.026, ez - 0.004); brow.rotation.z = sd * -0.12;
+    g.add(white, pupil, brow);
+  }
+  if (look.headwear === 'cap') {
+    const capMat = mat(look.capColor, 0.75);
+    const crown = new THREE.Mesh(geo.capCrown ??= new THREE.SphereGeometry(1, 28, 12, 0, Math.PI * 2, 0, Math.PI / 2), capMat);
+    crown.scale.set(rx * 1.14, ry * 0.85, rz * 1.14); crown.position.set(0, ry * 0.12, -rz * 0.04);
+    const visor = new THREE.Mesh(geo.visor ??= new THREE.CylinderGeometry(1, 1, 0.008, 24, 1, false, -Math.PI / 2, Math.PI), capMat);
+    visor.scale.set(rx * 0.95, 1, rz * 0.8); visor.position.set(0, ry * 0.14, rz * 0.75); visor.rotation.x = 0.14;
+    crown.castShadow = visor.castShadow = true;
+    g.add(crown, visor);
+  } else if (look.headwear === 'band') {
+    const band = new THREE.Mesh(geo.band ??= new THREE.TorusGeometry(1, 0.11, 8, 32), mat(0xffffff, 0.8));
+    band.scale.set(rx * 1.03, rz * 1.06, rx); band.rotation.x = Math.PI / 2 - 0.2; band.position.set(0, ry * 0.3, 0);
+    g.add(band);
+  }
+  return g;
 }
 
 export function createPersonView(person) {
   const rnd = mulberry(Math.floor(person.seed * 1e9));
   const pick = arr => arr[Math.floor(rnd() * arr.length)];
   const staff = person.role === 'reception' || person.role === 'keeper';
-  const skin = mat(pick(SKIN), 0.6);
-  const hair = mat(pick(HAIR), 0.8);
-  const top = mat(staff ? (person.role === 'reception' ? 0x1f6b4a : 0x6b7a3a) : pick(TOPS), 0.75);
-  const bottom = mat(staff ? 0x1b2a44 : pick(BOTTOMS), 0.75);
-  const shoe = mat(staff ? 0x2a2a2a : 0xf4f4f0, 0.5);
-  const female = rnd() < 0.48;
-  const scale = 0.92 + rnd() * 0.16;
+  const female = rnd() < 0.5;
+  const skin = pick(SKIN);
+  const top = staff ? (person.role === 'reception' ? 0x1f6b4a : 0x55603a) : pick(TOPS);
+  const bottom = staff ? 0x1b2a44 : pick(BOTTOMS);
+  const look = {
+    hair: pick(HAIR), long: female && rnd() < 0.55, ponytail: female && rnd() < 0.5,
+    headwear: !staff && rnd() < 0.18 ? 'cap' : !staff && rnd() < 0.12 ? 'band' : null, capColor: pick(TOPS),
+    pants: staff || rnd() < 0.12, longSleeve: person.role === 'keeper' || rnd() < 0.08,
+  };
+  look.skirt = female && !staff && !look.pants && rnd() < 0.55;
 
   const root = new THREE.Group();
-  const body = new THREE.Group();
+  const body = cloneSkinned(BASE.scene);
   root.add(body);
+  // Taille et carrure variées.
+  const height = (female ? 1.62 : 1.76) + (rnd() - 0.5) * 0.14;
+  const s = height / BASE.height;
+  body.scale.setScalar(s);
 
-  // Bassin (pivot du haut du corps).
-  const hips = new THREE.Group(); hips.position.y = 0.92; body.add(hips);
-  const pelvis = new THREE.Mesh(geo.pelvis ??= new THREE.CapsuleGeometry(0.15, 0.08, 6, 14).rotateZ(Math.PI / 2), bottom);
-  pelvis.scale.set(1, 1, 0.75); pelvis.castShadow = true;
-  hips.add(pelvis);
-  const torso = new THREE.Mesh(geo.torso ??= new THREE.CapsuleGeometry(0.16, 0.34, 8, 16).translate(0, 0.3, 0), top);
-  torso.scale.set(1.05, 1, female ? 0.68 : 0.72); torso.castShadow = true;
-  hips.add(torso);
-  if (female && !staff && rnd() < 0.6) {
-    // Jupe de tennis plissée.
-    const skirt = new THREE.Mesh(geo.skirt ??= new THREE.CylinderGeometry(0.16, 0.25, 0.26, 18, 1, true).translate(0, -0.08, 0), mat(bottom.color.getHex(), 0.75));
-    skirt.material.side = THREE.DoubleSide;
+  const colors = [skin, top, bottom, staff ? 0x1b2a44 : 0xf4f4f0, staff ? 0x2a2a2a : pick(SHOES)];
+  const material = outfitMaterial(colors, cutsFor(look));
+  body.traverse(o => { if (o.isSkinnedMesh) { o.material = material; o.castShadow = true; o.receiveShadow = false; } });
+
+  const bone = n => body.getObjectByName('mixamorig' + n);
+  const bones = {
+    hips: bone('Hips'), spine: bone('Spine'), spine1: bone('Spine1'), spine2: bone('Spine2'), neck: bone('Neck'), head: bone('Head'),
+    armR: bone('RightArm'), foreR: bone('RightForeArm'), handR: bone('RightHand'),
+    armL: bone('LeftArm'), foreL: bone('LeftForeArm'), handL: bone('LeftHand'),
+    upLegL: bone('LeftUpLeg'), upLegR: bone('RightUpLeg'), legL: bone('LeftLeg'), legR: bone('RightLeg'),
+  };
+  // Accessoires : placés dans la pose de repos (repère du corps, en mètres du modèle de base),
+  // puis rattachés à l'os sans changer leur position (ils suivent alors l'animation).
+  body.updateMatrixWorld(true);
+  const attach = (b, obj, pos) => {
+    obj.position.copy(pos).multiplyScalar(s);
+    obj.scale.multiplyScalar(s);
+    obj.updateMatrixWorld(true);
+    b.attach(obj);
+  };
+  attach(bones.head, dressHead(look), BASE.headBox.getCenter(new THREE.Vector3()));
+
+  // Jupe pour une partie des joueuses.
+  if (look.skirt) {
+    const w = BASE.hipW;
+    const skirt = new THREE.Mesh(geo.skirt ??= new THREE.CylinderGeometry(1, 1.45, 1, 24, 1, true),
+      new THREE.MeshStandardMaterial({ color: bottom, roughness: 0.75, side: THREE.DoubleSide }));
+    skirt.scale.set(w * 1.02, 0.24, w * 0.78);
     skirt.castShadow = true;
-    hips.add(skirt);
+    const holder = new THREE.Group(); holder.add(skirt);
+    const hp = BASE.marks.hips;
+    attach(bones.hips, holder, new THREE.Vector3(hp.x, hp.y - 0.1, hp.z));
   }
 
-  const neck = new THREE.Group(); neck.position.y = 0.66; hips.add(neck);
-  const neckM = new THREE.Mesh(geo.neck ??= new THREE.CylinderGeometry(0.05, 0.055, 0.1, 10).translate(0, 0.04, 0), skin);
-  neck.add(neckM);
-  const head = new THREE.Mesh(geo.head ??= new THREE.SphereGeometry(0.115, 24, 18), skin);
-  head.scale.set(0.92, 1.08, 1); head.position.y = 0.2; head.castShadow = true;
-  neck.add(head);
-  // Cheveux : calotte, plus une queue de cheval pour certains.
-  const hairCap = new THREE.Mesh(geo.hair ??= new THREE.SphereGeometry(0.122, 24, 14, 0, Math.PI * 2, 0, Math.PI * 0.55), hair);
-  hairCap.scale.set(0.95, 1.08, 1.04); hairCap.position.set(0, 0.215, -0.012); hairCap.rotation.x = -0.25;
-  neck.add(hairCap);
-  if (female && rnd() < 0.7) {
-    const tail = new THREE.Mesh(geo.tail ??= new THREE.CapsuleGeometry(0.035, 0.14, 4, 8), hair);
-    tail.position.set(0, 0.18, -0.13); tail.rotation.x = 0.5;
-    neck.add(tail);
-  }
-  if (!staff && rnd() < 0.3) {
-    // Casquette ou bandeau.
-    const band = new THREE.Mesh(geo.band ??= new THREE.TorusGeometry(0.112, 0.016, 8, 24), mat(0xffffff, 0.8));
-    band.rotation.x = Math.PI / 2 - 0.15; band.position.y = 0.25;
-    neck.add(band);
-  }
-  // Yeux discrets.
-  for (const s of [-1, 1]) {
-    const eye = new THREE.Mesh(geo.eye ??= new THREE.SphereGeometry(0.012, 8, 6), mat(0x1b1b1b, 0.3));
-    eye.position.set(s * 0.04, 0.215, 0.103);
-    neck.add(eye);
-  }
-
-  const limbs = {};
-  for (const [side, sx] of [['L', 1], ['R', -1]]) {
-    const shoulder = new THREE.Group(); shoulder.position.set(0.215 * sx, 0.55, 0); hips.add(shoulder);
-    const upper = limb(0.2, 0.05, top); shoulder.add(upper);
-    const elbow = new THREE.Group(); elbow.position.y = -0.27; shoulder.add(elbow);
-    const fore = limb(0.19, 0.042, skin); elbow.add(fore);
-    const hand = new THREE.Group(); hand.position.y = -0.27; elbow.add(hand);
-    hand.add(new THREE.Mesh(geo.hand ??= new THREE.SphereGeometry(0.045, 12, 10), skin));
-    limbs['shoulder' + side] = shoulder; limbs['elbow' + side] = elbow; limbs['hand' + side] = hand;
-
-    const hip = new THREE.Group(); hip.position.set(0.095 * sx, 0.9, 0); body.add(hip);
-    const thigh = limb(0.3, 0.07, female && !staff ? skin : bottom); hip.add(thigh);
-    const knee = new THREE.Group(); knee.position.y = -0.42; hip.add(knee);
-    const shin = limb(0.3, 0.055, staff ? bottom : skin); knee.add(shin);
-    const foot = new THREE.Mesh(geo.foot ??= new THREE.CapsuleGeometry(0.05, 0.12, 4, 10).rotateX(Math.PI / 2).translate(0, -0.42, 0.04), shoe);
-    foot.castShadow = true;
-    knee.add(foot);
-    limbs['hip' + side] = hip; limbs['knee' + side] = knee;
-  }
-
-  // Raquette dans la main droite (visible sur les courts et à l'arrivée des joueurs).
-  let racket = null;
+  // Raquette tenue dans la main droite : le manche traverse la paume (de l'auriculaire vers l'index),
+  // le tamis dans le prolongement de la paume (prise « eastern »), les doigts refermés sur le manche.
+  const handR = BASE.marks.hand.clone(); handR.x = -handR.x;
+  const curl = [];
   if (person.holdsRacket) {
-    racket = racketMesh(person.cust?.sport === 'padel');
-    racket.rotation.x = Math.PI / 2;
-    racket.position.set(0, -0.02, 0.02);
-    racket.scale.setScalar(1);
-    limbs.handR.add(racket);
+    const wp = n => bone(n).getWorldPosition(new THREE.Vector3());
+    const wrist = wp('RightHand'), mid = wp('RightHandMiddle1'), idx = wp('RightHandIndex1'), pinky = wp('RightHandPinky1');
+    const fingers = mid.clone().sub(wrist).normalize();
+    const axis = idx.clone().sub(pinky).normalize();
+    const yR = axis.clone().addScaledVector(fingers, 0.25).normalize();        // manche → tamis
+    const zR = new THREE.Vector3().crossVectors(fingers, yR).normalize();       // normale de la paume
+    const xR = new THREE.Vector3().crossVectors(yR, zR);
+    const racket = new THREE.Group();
+    const r = racketMesh(person.cust?.sport === 'padel');
+    r.position.y = -0.06;
+    racket.add(r);
+    racket.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xR, yR, zR));
+    const grip = wrist.clone().lerp(mid, 0.75).divideScalar(s);
+    racket.position.set(0, 0, 0);
+    attach(bones.handR, racket, grip);
+    // Doigts refermés : rotation autour de l'axe index → auriculaire, exprimée dans le repère de chaque phalange.
+    const wq = new THREE.Quaternion();
+    for (const f of ['Index', 'Middle', 'Ring', 'Pinky', 'Thumb']) for (const k of [1, 2, 3]) {
+      const b = bone('RightHand' + f + k);
+      if (!b) continue;
+      b.getWorldQuaternion(wq);
+      const local = axis.clone().applyQuaternion(wq.invert());
+      const ang = f === 'Thumb' ? (k === 1 ? 0 : 0.5) : [0, 1.25, 1.35, 0.9][k];
+      curl.push([b, local, ang]);
+    }
+    // Avant-bras tourné pour présenter le tamis vers l'avant.
+    bones.handR.getWorldQuaternion(wq);
+    curl.push([bones.foreR, fingers.clone().applyQuaternion(bones.foreR.getWorldQuaternion(new THREE.Quaternion()).invert()), 1.3]);
   }
   // Brosse de l'agent d'entretien.
-  let broom = null;
   if (person.role === 'keeper') {
-    broom = new THREE.Group();
+    const broom = new THREE.Group();
     const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.4, 8), mat(0x9b7a4a, 0.6));
-    stick.position.y = -0.5;
+    stick.position.y = -0.55;
     const brush = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.14), mat(0x3a3a3a, 0.9));
-    brush.position.y = -1.2;
+    brush.position.y = -1.25;
     broom.add(stick, brush);
-    broom.rotation.x = 0.5;
-    limbs.handR.add(broom);
+    broom.rotation.z = -Math.PI / 2;
+    attach(bones.handR, broom, handR.clone().add(new THREE.Vector3(-0.075, -0.03, 0)));
   }
 
-  root.scale.setScalar(scale);
-  root.traverse(o => { if (o.isMesh) o.receiveShadow = false; });
+  // Animations capturées.
+  const mixer = new THREE.AnimationMixer(body);
+  const actions = {};
+  for (const name of ['idle', 'walk', 'run']) {
+    actions[name] = mixer.clipAction(BASE.clips[name]);
+    actions[name].play();
+    actions[name].setEffectiveWeight(name === 'idle' ? 1 : 0);
+  }
+  mixer.update(rnd() * 2);
+  const weights = { idle: 1, walk: 0, run: 0 };
+  const q = new THREE.Quaternion(), e = new THREE.Euler();
+  const addRot = (b, x, y, z) => { if (!b || (!x && !y && !z)) return; q.setFromEuler(e.set(x, y, z)); b.quaternion.multiply(q); };
 
   const view = {
-    root, body, hips, neck, limbs, racket, phase: rnd() * 10, speed: 0,
-    swingT: -1, lastX: person.x, lastZ: person.z, offsetX: 0, offsetZ: 0, lookYaw: 0,
-    bubble: null, bubbleT: 0,
+    root, phase: rnd() * 10, speed: 0, swingT: -1, lastX: person.x, lastZ: person.z, offsetX: 0, offsetZ: 0,
+    bubble: null, bubbleT: 0, stance: 0, browse: 0, clean: 0, desk: 0,
     swing() { this.swingT = 0; },
     update(dt, p) {
-      // Vitesse mesurée à partir du déplacement réel.
-      const vx = (p.x - this.lastX) / Math.max(dt, 1e-4), vz = (p.z - this.lastZ) / Math.max(dt, 1e-4);
-      this.lastX = p.x; this.lastZ = p.z;
-      const sp = Math.min(3, Math.hypot(vx, vz));
-      this.speed = damp(this.speed, sp, 10, dt);
+      const vx = (p.x + this.offsetX - this.lastX) / Math.max(dt, 1e-4), vz = (p.z + this.offsetZ - this.lastZ) / Math.max(dt, 1e-4);
+      this.lastX = p.x + this.offsetX; this.lastZ = p.z + this.offsetZ;
+      this.speed = damp(this.speed, Math.min(4, Math.hypot(vx, vz)), 8, dt);
       root.position.set(p.x + this.offsetX, 0, p.z + this.offsetZ);
       let targetRot = p.rot;
       if (p.look && p.action === 'browse') targetRot = Math.atan2(p.look.x - p.x, p.look.z - p.z);
       root.rotation.y = dampAngle(root.rotation.y, targetRot, 10, dt);
 
-      const L = this.limbs;
-      const walk = clamp(this.speed / 1.4, 0, 1.4);
-      this.phase += dt * (2.2 + this.speed * 3.2);
-      const s = Math.sin(this.phase);
-      let hipL = s * 0.55 * walk, hipR = -s * 0.55 * walk;
-      let kneeL = Math.max(0, -Math.cos(this.phase)) * 0.8 * walk, kneeR = Math.max(0, Math.cos(this.phase)) * 0.8 * walk;
-      let shL = -s * 0.45 * walk, shR = s * 0.45 * walk, elL = -0.25, elR = -0.25;
-      let shLz = 0.06, shRz = -0.06;
-      let bob = Math.abs(Math.cos(this.phase)) * 0.035 * walk;
-      let twist = 0, lean = 0.03 * walk;
-
-      if (p.action === 'play') {
-        // Position d'attente : genoux fléchis, raquette devant.
-        const ready = 1 - walk;
-        kneeL += 0.35 * ready; kneeR += 0.35 * ready; hipL -= 0.2 * ready; hipR -= 0.2 * ready;
-        lean += 0.18 * ready; bob -= 0.06 * ready;
-        shR = -0.7; elR = -0.9; shL = -0.4; elL = -0.8;
-        // Petit sautillement.
-        bob += Math.abs(Math.sin(this.phase * 1.8)) * 0.025 * ready;
-      } else if (p.action === 'browse') {
-        shR = -1.0 + Math.sin(this.phase * 0.7) * 0.15; elR = -0.4;
-        this.neck.rotation.x = 0.15;
-      } else if (p.action === 'clean') {
-        const b = Math.sin(this.phase * 1.4);
-        shR = -0.6 + b * 0.35; shL = -0.6 + b * 0.35; elR = -0.5; elL = -0.5; lean += 0.2;
-      } else if (p.role === 'reception') {
-        shR = -0.35; shL = -0.35; elR = -1.2; elL = -1.2;
+      // Mélange repos / marche / course selon la vitesse réelle.
+      const sp = this.speed;
+      const wWalk = clamp(sp / 0.6, 0, 1) * (1 - clamp((sp - 2.2) / 1.2, 0, 1));
+      const wRun = clamp((sp - 2.2) / 1.2, 0, 1);
+      const wIdle = 1 - Math.max(wWalk, wRun);
+      for (const [k, w] of [['idle', wIdle], ['walk', wWalk], ['run', wRun]]) {
+        weights[k] = damp(weights[k], w, 10, dt);
+        actions[k].setEffectiveWeight(weights[k]);
       }
-      if (p.action !== 'browse') this.neck.rotation.x = damp(this.neck.rotation.x, 0, 6, dt);
+      actions.walk.timeScale = clamp(sp / 1.35, 0.6, 1.6);
+      actions.run.timeScale = clamp(sp / 3.4, 0.8, 1.4);
+      mixer.update(dt);
 
-      // Coup droit : armé puis frappe de droite à gauche.
+      // Postures ajoutées par-dessus la capture de mouvement.
+      this.stance = damp(this.stance, p.action === 'play' ? 1 : 0, 6, dt);
+      this.browse = damp(this.browse, p.action === 'browse' ? 1 : 0, 6, dt);
+      this.clean = damp(this.clean, p.action === 'clean' ? 1 : 0, 6, dt);
+      this.desk = damp(this.desk, p.role === 'reception' ? 1 : 0, 6, dt);
+      const st = this.stance * (1 - clamp(sp / 1.5, 0, 1));
+      if (st > 0.01) {
+        // Attente de la balle : buste penché, genoux fléchis, raquette devant.
+        addRot(bones.spine, 0.28 * st, 0, 0);
+        addRot(bones.upLegL, -0.45 * st, 0, 0); addRot(bones.upLegR, -0.45 * st, 0, 0);
+        addRot(bones.legL, 0.6 * st, 0, 0); addRot(bones.legR, 0.6 * st, 0, 0);
+        addRot(bones.armR, 0.9 * st, 0, 0.35 * st); addRot(bones.foreR, 0, 0, -0.6 * st);
+        addRot(bones.armL, 0.6 * st, 0, -0.3 * st); addRot(bones.foreL, 0, 0, 0.7 * st);
+        bones.hips.position.y -= 6 * st;
+      }
+      if (this.browse > 0.01) {
+        addRot(bones.armR, 1.0 * this.browse, 0, 0.2 * this.browse);
+        addRot(bones.neck, 0.15 * this.browse, 0, 0);
+      }
+      if (this.clean > 0.01) {
+        const b = Math.sin(performance.now() / 260);
+        addRot(bones.spine, 0.35 * this.clean, 0, 0);
+        addRot(bones.armR, (0.9 + b * 0.35) * this.clean, 0, 0);
+        addRot(bones.armL, (0.9 + b * 0.35) * this.clean, 0, 0);
+      }
+      if (this.desk > 0.01) {
+        addRot(bones.armR, 0.7 * this.desk, 0, 0); addRot(bones.foreR, 0, 0, -0.9 * this.desk);
+        addRot(bones.armL, 0.7 * this.desk, 0, 0); addRot(bones.foreL, 0, 0, 0.9 * this.desk);
+      }
+      // Coup droit : armé (bras en arrière, buste tourné) puis frappe vers l'avant.
       if (this.swingT >= 0) {
         this.swingT += dt;
-        const t = this.swingT / 0.55;
+        const t = this.swingT / 0.6;
         if (t >= 1) this.swingT = -1;
         else {
-          twist = t < 0.4 ? -0.9 * (t / 0.4) : -0.9 + 1.8 * Math.min(1, (t - 0.4) / 0.35);
-          shR = -1.2; elR = -0.3; shRz = t < 0.4 ? -0.9 : 0.4;
+          const prep = t < 0.4 ? t / 0.4 : 1 - (t - 0.4) / 0.6;
+          const hit = t < 0.4 ? 0 : Math.sin(((t - 0.4) / 0.6) * Math.PI);
+          addRot(bones.spine1, 0, -0.7 * prep + 0.6 * hit, 0);
+          addRot(bones.armR, 0.4 * hit, 0, -0.9 * prep + 0.5 * hit);
+          addRot(bones.foreR, 0, 0, -0.3 * prep);
         }
       }
 
-      L.hipL.rotation.x = damp(L.hipL.rotation.x, -hipL, 14, dt);
-      L.hipR.rotation.x = damp(L.hipR.rotation.x, -hipR, 14, dt);
-      L.kneeL.rotation.x = damp(L.kneeL.rotation.x, kneeL, 14, dt);
-      L.kneeR.rotation.x = damp(L.kneeR.rotation.x, kneeR, 14, dt);
-      L.shoulderL.rotation.x = damp(L.shoulderL.rotation.x, shL, 12, dt);
-      L.shoulderR.rotation.x = damp(L.shoulderR.rotation.x, shR, 16, dt);
-      L.shoulderL.rotation.z = damp(L.shoulderL.rotation.z, shLz, 12, dt);
-      L.shoulderR.rotation.z = damp(L.shoulderR.rotation.z, shRz, 16, dt);
-      L.elbowL.rotation.x = damp(L.elbowL.rotation.x, elL, 12, dt);
-      L.elbowR.rotation.x = damp(L.elbowR.rotation.x, elR, 12, dt);
-      this.hips.rotation.y = damp(this.hips.rotation.y, twist, 16, dt);
-      this.hips.rotation.x = damp(this.hips.rotation.x, lean, 8, dt);
-      this.body.position.y = bob;
+      for (const [b, ax, ang] of curl) b.quaternion.multiply(q.setFromAxisAngle(ax, ang * CURL));
 
       if (this.bubble) {
         this.bubbleT -= dt;
         this.bubble.material.opacity = clamp(this.bubbleT / 0.4, 0, 1);
-        this.bubble.position.y = 2.15 + (1 - clamp(this.bubbleT / 3, 0, 1)) * 0.15;
+        this.bubble.position.y = height + 0.38 + (1 - clamp(this.bubbleT / 3, 0, 1)) * 0.15;
         if (this.bubbleT <= 0) { root.remove(this.bubble); this.bubble.material.map.dispose(); this.bubble.material.dispose(); this.bubble = null; }
       }
     },
@@ -211,13 +369,13 @@ export function createPersonView(person) {
       if (this.bubble) { root.remove(this.bubble); this.bubble.material.map.dispose(); this.bubble.material.dispose(); }
       const tex = bubbleTexture(text, kind);
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false }));
-      const aspect = tex.image.width / tex.image.height;
-      sp.scale.set(0.42 * aspect, 0.42, 1);
-      sp.position.y = 2.15;
+      sp.scale.set(0.42 * tex.image.width / tex.image.height, 0.42, 1);
+      sp.position.y = height + 0.38;
       sp.renderOrder = 10;
       root.add(sp);
       this.bubble = sp; this.bubbleT = 3.2;
     },
+    dispose() { mixer.stopAllAction(); material.dispose(); },
   };
   return view;
 }

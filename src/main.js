@@ -8,7 +8,9 @@ import { createEnvironment } from './render/environment.js';
 import { createBuilding } from './render/building.js';
 import { createShelves } from './render/shelves.js';
 import { createCourts } from './render/courts.js';
-import { createPersonView } from './render/people.js';
+import { createPersonView, initPeople } from './render/people.js';
+import { loadAssets } from './render/assets.js';
+import { createPost } from './render/post.js';
 import { boxMesh } from './render/products.js';
 import { createInput } from './core/input.js';
 import { Player } from './core/player.js';
@@ -34,16 +36,25 @@ const SAVE_KEY = 'tennis-club-sim-save-v1';
 
 // --- Rendu ---------------------------------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-// Qualité graphique : « haute » par défaut, « économie » pour les ordinateurs modestes.
+// Qualité graphique : « ultra », « haute » (par défaut) ou « économie » pour les ordinateurs modestes.
+const QUALITIES = ['ultra', 'high', 'low'];
+const QUALITY_LABEL = { ultra: 'ultra', high: 'haute qualité', low: 'mode économie' };
 let quality = 'high';
-try { quality = localStorage.getItem('tennis-club-quality') || 'high'; } catch { /* stockage indisponible */ }
+try { const q = localStorage.getItem('tennis-club-quality'); if (QUALITIES.includes(q)) quality = q; } catch { /* stockage indisponible */ }
+let post = null, env = null;
 function applyQuality() {
-  renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75);
-  renderer.shadowMap.enabled = quality === 'high';
+  renderer.setPixelRatio(quality === 'ultra' ? Math.min(devicePixelRatio, 1.5) : quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75);
+  renderer.shadowMap.enabled = quality !== 'low';
+  if (env) {
+    env.sun.shadow.mapSize.setScalar(quality === 'ultra' ? 4096 : 2048);
+    env.sun.shadow.map?.dispose(); env.sun.shadow.map = null;
+    env.setIBL(quality !== 'low');
+  }
   scene?.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
   fit?.();
+  post?.setLevel(quality);
 }
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 $('game').appendChild(renderer.domElement);
@@ -54,12 +65,14 @@ function fit() {
   renderer.setSize(innerWidth, innerHeight);
   camera.aspect = innerWidth / innerHeight;
   camera.updateProjectionMatrix();
+  post?.resize();
 }
 addEventListener('resize', fit);
-applyQuality();
+post = createPost(renderer, scene, camera);
 
 const interactables = [];
-const env = createEnvironment(scene, renderer);
+env = createEnvironment(scene, renderer);
+applyQuality();
 const building = createBuilding(scene, interactables);
 const audio = createAudio();
 const hud = createHud();
@@ -132,7 +145,7 @@ const hooks = {
   },
   despawnPerson(p) {
     const v = personViews.get(p.id);
-    if (v) { scene.remove(v.root); personViews.delete(p.id); }
+    if (v) { scene.remove(v.root); v.dispose(); personViews.delete(p.id); }
   },
   bubble(p, text, kind) { personViews.get(p.id)?.say(text, kind); },
   shelfChanged(i) { shelves?.refresh(i); },
@@ -419,10 +432,10 @@ $('btn-quit').addEventListener('click', () => { save(); location.reload(); });
 $('click-to-play').addEventListener('click', () => input.requestLock());
 $('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? 'Activer le son' : 'Couper le son'; });
 const qBtn = $('btn-quality');
-const qLabel = () => { qBtn.textContent = quality === 'high' ? 'Graphismes : haute qualité' : 'Graphismes : mode économie'; };
+const qLabel = () => { qBtn.textContent = 'Graphismes : ' + QUALITY_LABEL[quality]; };
 qLabel();
 qBtn.addEventListener('click', () => {
-  quality = quality === 'high' ? 'low' : 'high';
+  quality = QUALITIES[(QUALITIES.indexOf(quality) + 1) % QUALITIES.length];
   try { localStorage.setItem('tennis-club-quality', quality); } catch { /* rien */ }
   applyQuality(); qLabel();
 });
@@ -458,16 +471,23 @@ function tick() {
     const { night } = env.setTime(club.s.minute, player.pos);
     building.update(club.s.minute, night);
     courts.setNight(night > 0.35 && club.s.upgrades.lights);
+    post.setNight(night);
     hud.update(club, ui);
     const ch = input.locked || input.fallback || mode !== 'play' || input.uiOpen;
     if ($('click-to-play').hidden !== ch) $('click-to-play').hidden = ch;
     const lh = !(input.fallback && mode === 'play' && !input.uiOpen);
     if ($('look-help').hidden !== lh) $('look-help').hidden = lh;
   }
-  renderer.render(scene, camera);
+  post.render();
 }
 renderer.setAnimationLoop(tick);
-$('loading').hidden = true;
+
+// Modèles 3D, parquet et ciel photographiés : intégrés à jeu.js, décodés au démarrage.
+loadAssets().then(assets => {
+  initPeople(assets);
+  building.setFloor(assets.wood);
+  $('loading').hidden = true;
+}).catch(e => showError('Chargement des modèles impossible : ' + (e?.message ?? e)));
 
 // Accès pour les tests automatisés et la console.
 window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld };
