@@ -6,7 +6,15 @@ Au départ, le club des Platanes a un seul court en terre battue, deux étagère
 
 ## Lancer le jeu
 
-Il faut un petit serveur local, car le navigateur bloque les modules JavaScript ouverts directement depuis le disque :
+Le plus simple : **double-clique sur le lanceur** de ton système, dans le dossier du jeu.
+
+- Windows : `Lancer le jeu (Windows).bat`
+- Mac : `Lancer le jeu (Mac).command` (la première fois : clic droit → Ouvrir, pour passer l'avertissement de sécurité)
+- Linux : `lancer-le-jeu-linux.sh`
+
+Le lanceur démarre un petit serveur local et ouvre le jeu dans le navigateur (http://localhost:8000). Laisse la fenêtre ouverte pendant la partie. Il faut Python ; s'il manque, le lanceur ouvre la page de téléchargement.
+
+À la main, cela revient à taper dans le dossier du jeu (le navigateur bloque les modules JavaScript ouverts directement depuis le disque) :
 
 ```bash
 npm start            # ou : python3 -m http.server 8000
