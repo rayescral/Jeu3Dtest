@@ -24,7 +24,7 @@ export function createState() {
   for (const id of Object.keys(SERVICES)) prices[id] = SERVICES[id].market;
   return {
     version: 1,
-    money: START_MONEY, day: 1, minute: OPEN_HOUR * 60, open: false,
+    money: START_MONEY, day: 1, minute: OPEN_HOUR * 60, open: false, dayStarted: false,
     xp: 0, level: 1, licences: START_LICENCES, satisfaction: 0.62,
     prices,
     courts: Object.fromEntries(COURTS.map((c, i) => [c.id, { built: i === 0, wear: 0 }])),
@@ -717,6 +717,8 @@ export class Club {
     if (this.dayOver) return this.s.open;
     if (!this.s.open && this.s.minute >= this.closeMinute - 30) { this.h.notify('Trop tard pour ouvrir aujourd\'hui', 'bad'); return false; }
     this.s.open = !this.s.open;
+    // La journée (et l'horloge) démarre la première fois qu'on ouvre le club.
+    if (this.s.open && !this.s.dayStarted) { this.s.dayStarted = true; this.h.dayStarted?.(); }
     this.h.openChanged(this.s.open);
     return this.s.open;
   }
@@ -733,12 +735,13 @@ export class Club {
     const r = Math.random() * (wLic + wBook + wShop);
     return r < wBook ? 'book' : r < wBook + wShop ? 'shop' : 'licence';
   }
-  canEndDay() { return !this.s.open && this.customers.length === 0 && !this.dayOver; }
+  canEndDay() { return !!this.s.dayStarted && !this.s.open && this.customers.length === 0 && !this.dayOver; }
 
   update(dt, ctx = {}) {
     if (this.dayOver) return;
     const s = this.s;
-    s.minute += dt * GAME_MIN_PER_SEC;
+    // Avant l'ouverture, l'horloge reste à 8 h : on prépare le club sans perdre de temps.
+    if (s.dayStarted) s.minute += dt * GAME_MIN_PER_SEC;
     for (const c of Object.values(this.court)) if (c.reservedBy == null) c.playing = false;
     this.counter.idleT = (this.counter.idleT || 0) + (this.counter.cust ? dt : 0);
     if (ctx.playerAtCounter) this.counter.idleT = 0;
@@ -768,7 +771,7 @@ export class Club {
       this.cancelCheckout();
       this.queue.length = 0;
     }
-    if (!s.open && s.minute >= this.closeMinute && this.customers.length === 0) this.endDay();
+    if (s.dayStarted && !s.open && s.minute >= this.closeMinute && this.customers.length === 0) this.endDay();
   }
 
   endDay() {
@@ -796,6 +799,7 @@ export class Club {
     s.day++;
     s.minute = OPEN_HOUR * 60;
     s.open = false;
+    s.dayStarted = false;
     s.stats = freshStats();
     this.dayOver = false;
     for (const cust of [...this.customers]) this.removeCustomer(cust);

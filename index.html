@@ -24,8 +24,9 @@
     </div>
     <div class="hud-right">
       <div class="clock"><span id="hud-day">Jour 1</span><b id="hud-clock">08:00</b></div>
-      <span class="status closed" id="hud-status">Fermé</span>
+      <span class="status prep" id="hud-status">Préparation</span>
     </div>
+    <div id="prep">L'horloge est arrêtée : prépare le club, puis retourne la pancarte de l'entrée sur <b>OUVERT</b> pour lancer la journée.</div>
 
     <div id="crosshair"></div>
     <div id="hint" hidden></div>
@@ -35,7 +36,7 @@
     <div id="objectives" hidden></div>
     <div id="toasts"></div>
     <div id="levelup" hidden></div>
-    <div class="keys"><kbd>E</kbd> interagir <kbd>Tab</kbd> ordinateur <kbd>G</kbd> poser <kbd>Maj</kbd> courir <kbd>Échap</kbd> pause</div>
+    <div class="keys"><kbd>E</kbd> interagir <kbd>Tab</kbd> ordinateur <kbd>G</kbd> poser <kbd>Espace</kbd> sauter <kbd>Maj</kbd> courir <kbd>Échap</kbd> pause</div>
   </div>
 
   <button id="click-to-play" hidden>Clique pour reprendre</button>
@@ -93,10 +94,8 @@
 
   <div id="loading">Préparation du club…</div>
   <div id="error" hidden><b>Oups, une erreur est survenue.</b><span>Recharge la page ; ta dernière sauvegarde est conservée. Détail :</span><code></code></div>
-
-  <script type="importmap">
-    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
-  </script>
-  <script type="module" src="src/main.js"></script>
+  <!-- Tout le jeu est dans jeu.js (généré par « npm run build » à partir de src/). Un script classique
+       s'ouvre aussi d'un double-clic sur index.html, sans serveur. -->
+  <script src="jeu.js"></script>
 </body>
 </html>

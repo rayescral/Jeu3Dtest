@@ -10,7 +10,7 @@ export const OBJECTIVES = [
   { id: 'order', text: 'Ouvre l\'ordinateur de l\'accueil (E) et commande des tubes de balles' },
   { id: 'pick', text: 'Récupère le carton livré devant le club (E)' },
   { id: 'shelf', text: 'Range les balles sur une étagère de la boutique (clic gauche)' },
-  { id: 'open', text: 'Retourne la pancarte de l\'entrée sur OUVERT (E)' },
+  { id: 'open', text: 'Retourne la pancarte de l\'entrée sur OUVERT (E) : la journée commence' },
   { id: 'serve', text: 'Encaisse ton premier client au comptoir' },
   { id: 'clean', text: 'Brosse le court quand il est usé (maintiens E)' },
 ];
@@ -31,7 +31,7 @@ export function createHud() {
   return {
     update(club, ui) {
       const s = club.s;
-      const key = [Math.round(s.money * 100), s.level, Math.floor(club.xpProgress() * 100), s.licences, Math.round(s.satisfaction * 50), Math.floor(s.minute), s.open, s.day, club.capacity].join('|');
+      const key = [Math.round(s.money * 100), s.level, Math.floor(club.xpProgress() * 100), s.licences, Math.round(s.satisfaction * 50), Math.floor(s.minute), s.open, s.day, club.capacity, s.dayStarted].join('|');
       if (key !== lastKey) {
         lastKey = key;
         $('hud-money').textContent = fmtMoney(s.money);
@@ -42,22 +42,30 @@ export function createHud() {
         $('hud-day').textContent = `Jour ${s.day}`;
         $('hud-clock').textContent = fmtClock(s.minute);
         const st = $('hud-status');
-        st.textContent = s.open ? 'Ouvert' : 'Fermé';
-        st.className = 'status ' + (s.open ? 'open' : 'closed');
+        st.textContent = s.open ? 'Ouvert' : s.dayStarted ? 'Fermé' : 'Préparation';
+        st.className = 'status ' + (s.open ? 'open' : s.dayStarted ? 'closed' : 'prep');
+        $('prep').hidden = !!s.dayStarted;
       }
       // Aide contextuelle sous le viseur.
+      // On ne touche au DOM que si quelque chose a changé (sinon le navigateur recalcule la page à chaque image).
       const hint = $('hint');
-      if (ui.hint) { hint.innerHTML = ui.hint; hint.hidden = false; } else hint.hidden = true;
-      $('crosshair').classList.toggle('active', !!ui.target);
+      if (ui.hint !== this.lastHint) {
+        this.lastHint = ui.hint;
+        if (ui.hint) { hint.innerHTML = ui.hint; hint.hidden = false; } else hint.hidden = true;
+      }
+      if (!!ui.target !== this.lastTarget) { this.lastTarget = !!ui.target; $('crosshair').classList.toggle('active', this.lastTarget); }
       // Progression du brossage.
       const ring = $('progress');
-      if (ui.progress > 0) { ring.hidden = false; ring.style.setProperty('--p', `${(ui.progress * 100).toFixed(1)}%`); } else ring.hidden = true;
+      if (ui.progress > 0) { ring.hidden = false; ring.style.setProperty('--p', `${(ui.progress * 100).toFixed(1)}%`); } else if (!ring.hidden) ring.hidden = true;
       // Carton en main.
-      const held = $('held');
-      if (ui.held) {
-        held.hidden = false;
-        held.innerHTML = `<b>${PRODUCTS[ui.held.product].name}</b><span>${ui.held.qty} / ${PRODUCTS[ui.held.product].box}</span><small>G : poser le carton</small>`;
-      } else held.hidden = true;
+      const held = $('held'), hk = ui.held ? `${ui.held.product}|${ui.held.qty}` : '';
+      if (hk !== this.lastHeld) {
+        this.lastHeld = hk;
+        if (ui.held) {
+          held.hidden = false;
+          held.innerHTML = `<b>${PRODUCTS[ui.held.product].name}</b><span>${ui.held.qty} / ${PRODUCTS[ui.held.product].box}</span><small>G : poser le carton</small>`;
+        } else held.hidden = true;
+      }
     },
 
     checkout(counter) {

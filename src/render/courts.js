@@ -124,10 +124,10 @@ function buildTennis(def) {
   chair.position.set(-7.4, 0, 0);
   g.add(chair);
   const wood = std(0xa07a52, { roughness: 0.6 });
-  for (const z of [-1.6, 1.6]) {
-    g.add(mesh(new THREE.BoxGeometry(0.42, 0.05, 1.6), wood, 7.9, 0.46, z));
-    g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, 7.9, 0.22, z - 0.7));
-    g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, 7.9, 0.22, z + 0.7));
+  for (const z of [-2.2, 2.2]) {
+    g.add(mesh(new THREE.BoxGeometry(0.42, 0.05, 1.6), wood, -7.9, 0.46, z));
+    g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, -7.9, 0.22, z - 0.7));
+    g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, -7.9, 0.22, z + 0.7));
   }
   const num = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), new THREE.MeshStandardMaterial({ map: signTexture([def.label.toUpperCase()], def.surface === 'clay' ? '#d9673a' : '#2f5d9e') }));
   num.position.set(2.2, 2.6, z1 + 0.05);

@@ -1,7 +1,7 @@
 // Le club-house : façade vitrée, bardage bois, parquet, plafond lumineux, comptoir d'accueil avec caisse,
 // ordinateur, terminal de paiement, pancarte OUVERT/FERMÉ, décor (trophées, affiches, plantes, horloge).
 import * as THREE from 'three';
-import { CLUB, DOOR_W, COUNTER, LAPTOP, REGISTER, TERMINAL, COUNTER_MAT, SIGN } from '../game/layout.js';
+import { CLUB, DOOR_W, COUNTER, LAPTOP, REGISTER, TERMINAL, COUNTER_MAT, SIGN, PLANTS, LOBBY_BENCH } from '../game/layout.js';
 import { woodFloorTexture, wallTexture, cladTexture, canvasTexture } from './textures.js';
 import { productMesh } from './products.js';
 import { fmtMoney, fmtClock } from '../core/util.js';
@@ -279,7 +279,7 @@ export function createBuilding(scene, interactables) {
   const potMat = std(0x2b2f33, { roughness: 0.5 });
   const leafMat = std(0x3f7a34, { roughness: 0.8 });
   const leafGeo = new THREE.IcosahedronGeometry(0.42, 2);
-  for (const [x, z] of [[-9.3, 13.3], [9.3, 13.3], [-1.9, 0.6], [1.9, 0.6]]) {
+  for (const { x, z } of PLANTS) {
     group.add(box(0.5, 0.55, 0.5, potMat, x, 0.275, z));
     const leaf = new THREE.Mesh(leafGeo, leafMat);
     leaf.position.set(x, 0.95, z); leaf.scale.set(1, 1.3, 1);
@@ -290,9 +290,10 @@ export function createBuilding(scene, interactables) {
   group.add(box(2, 0.012, 1.2, std(0x3a3226, { roughness: 1 }), 0, 0.03, 13.2, { cast: false }));
   // Bancs du salon.
   const benchWood = std(0xa07a52, { roughness: 0.6 }), steel = std(0x30353a, { metalness: 0.6, roughness: 0.4 });
-  for (const z of [12.15]) {
-    group.add(box(3.6, 0.06, 0.42, benchWood, 2.9, 0.46, z));
-    for (const x of [1.3, 4.5]) group.add(box(0.06, 0.44, 0.38, steel, x, 0.22, z));
+  {
+    const b = LOBBY_BENCH;
+    group.add(box(b.w, 0.06, b.d, benchWood, b.x, 0.46, b.z));
+    for (const x of [b.x - b.w / 2 + 0.2, b.x + b.w / 2 - 0.2]) group.add(box(0.06, 0.44, 0.38, steel, x, 0.22, b.z));
   }
 
   // --- Articles posés sur le comptoir --------------------------------------------------------------------

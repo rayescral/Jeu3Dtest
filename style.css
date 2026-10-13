@@ -69,6 +69,9 @@ kbd { font: 600 12px var(--font); background: rgba(255,255,255,.92); color: var(
 .status { font-size: 13px; font-weight: 700; padding: 4px 12px; border-radius: 999px; text-transform: uppercase; letter-spacing: .08em; }
 .status.open { background: var(--green-2); }
 .status.closed { background: var(--bad); }
+.status.prep { background: #e0a020; color: var(--ink); }
+#prep { position: absolute; right: 16px; top: calc(96px + env(safe-area-inset-top, 0px)); max-width: 300px; background: var(--glass); padding: 10px 14px; border-radius: 12px; font-size: 14px; line-height: 1.4; backdrop-filter: blur(6px); }
+#prep b { color: var(--ball); }
 
 #crosshair { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(255,255,255,.9); box-shadow: 0 0 0 1.5px rgba(0,0,0,.35); transition: transform .12s; }
 #crosshair.active { transform: scale(1.6); background: var(--ball); }

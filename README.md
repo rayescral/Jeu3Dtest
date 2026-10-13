@@ -6,9 +6,19 @@ Au départ, le club des Platanes a un seul court en terre battue, deux étagère
 
 ## Jouer
 
-**En ligne (recommandé)** : mets le jeu sur Netlify en glisser-déposer, comme Justice Deck. Le pas-à-pas est dans `Tennis Club Simulator - Mettre en ligne.txt`.
+**Double-clique sur `index.html`.** Le jeu s'ouvre dans le navigateur, sans serveur ni installation (comme Justice Deck). Il faut seulement les fichiers `index.html`, `style.css` et `jeu.js` dans le même dossier.
 
-**Sur ton ordinateur, pour développer** : lance un petit serveur dans le dossier (`npm start`, ou `python -m http.server 8000`), puis ouvre http://localhost:8000. Ouvrir `index.html` d'un double-clic ne marche pas : le navigateur bloque les modules JavaScript chargés depuis le disque.
+## Développer
+
+Le code source est dans `src/` (modules JavaScript). `jeu.js` est généré à partir de ces sources :
+
+```bash
+npm install        # une seule fois
+npm run build      # régénère jeu.js après une modification
+npm test           # tests automatiques
+```
+
+`dev.html` charge directement les sources (pratique pour développer, mais il faut un serveur local : `npm start` puis http://localhost:8000/dev.html).
 
 ## Commandes
 
@@ -17,6 +27,7 @@ Au départ, le club des Platanes a un seul court en terre battue, deux étagère
 | Z Q S D (W A S D en QWERTY) | Se déplacer |
 | Souris | Regarder (clic pour capturer la souris) |
 | Maj | Courir |
+| Espace | Sauter |
 | E | Prendre un carton, utiliser l'ordinateur, retourner la pancarte ; maintenir pour brosser un terrain |
 | Clic gauche | Ranger un article, scanner un article, ouvrir le terminal ou le tiroir-caisse |
 | Clic droit | Reprendre un article de l'étagère dans le carton, retirer une étiquette vide |
@@ -28,7 +39,8 @@ Si le navigateur refuse de capturer la souris, le jeu passe tout seul en mode «
 
 ## Déroulement
 
-- **Une journée** dure environ 7 minutes, de 8 h à 21 h (23 h avec l'éclairage des courts). Les clients arrivent quand la pancarte est sur OUVERT.
+- **Avant l'ouverture**, l'horloge reste à 8 h : tu peux commander, ranger et préparer le club tranquillement.
+- **La journée commence quand tu retournes la pancarte sur OUVERT.** Elle dure environ 7 minutes, jusqu'à 21 h (23 h avec l'éclairage des courts).
 - **Les clients** viennent réserver un court (2 joueurs au tennis, 4 au padel), acheter en boutique ou prendre leur licence. Ils repartent mécontents s'ils attendent trop, si un produit manque, si c'est trop cher ou si le terrain est mal entretenu.
 - **La caisse** : clique sur chaque article posé sur le comptoir pour le scanner. En carte, tape le total sur le terminal. En espèces, rends la monnaie avec les billets et les pièces du tiroir.
 - **Les terrains s'usent** à chaque partie (la terre battue plus vite que la résine). Maintiens E en visant le sol pour les brosser, ou embauche un agent d'entretien.

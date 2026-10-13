@@ -37,8 +37,13 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 // Qualité graphique : « haute » par défaut, « économie » pour les ordinateurs modestes.
 let quality = 'high';
 try { quality = localStorage.getItem('tennis-club-quality') || 'high'; } catch { /* stockage indisponible */ }
+// Résolution adaptative : si les images mettent trop de temps à s'afficher (grand écran, carte
+// graphique modeste), on baisse un peu la résolution interne, puis on la remonte quand ça va mieux.
+let maxRatio = 1, renderScale = 1, frameAvg = 16, adaptT = 0;
 function applyQuality() {
-  renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.85);
+  maxRatio = quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75;
+  renderScale = 1;
+  renderer.setPixelRatio(maxRatio);
   renderer.shadowMap.enabled = quality === 'high';
   scene?.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
   fit?.();
@@ -85,12 +90,15 @@ function load() {
     const raw = localStorage.getItem(SAVE_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    return s && s.version === 1 ? s : null;
+    if (!s || s.version !== 1) return null;
+    // Sauvegarde d'une version précédente, faite en pleine journée : l'horloge tournait déjà.
+    s.dayStarted ??= s.minute > 8 * 60 + 1;
+    return s;
   } catch { return null; }
 }
 
 function rebuildColliders() {
-  colliders = staticColliders();
+  colliders = [...staticColliders(), ...env.colliders];
   club.s.shelves.forEach((sh, i) => { if (sh.built) colliders.push(shelfCollider(SHELF_SLOTS[i])); });
   for (const c of COURTS) if (club.s.courts[c.id].built) colliders.push(...courtColliders(c.id, COURT_TYPES[c.surface].sport));
 }
@@ -428,8 +436,21 @@ qBtn.addEventListener('click', () => {
 const clock = new THREE.Clock();
 let menuT = 0, birdT = 4, stepPhase = 0;
 
+function adaptResolution(rawDt) {
+  frameAvg += (rawDt * 1000 - frameAvg) * 0.05;
+  adaptT += rawDt;
+  if (adaptT < 1.5 || document.hidden) return;
+  adaptT = 0;
+  const before = renderScale;
+  if (frameAvg > 24 && renderScale > 0.55) renderScale = Math.max(0.55, renderScale - 0.1);
+  else if (frameAvg < 15 && renderScale < 1) renderScale = Math.min(1, renderScale + 0.05);
+  if (renderScale !== before) { renderer.setPixelRatio(maxRatio * renderScale); fit(); }
+}
+
 function tick() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const rawDt = clock.getDelta();
+  const dt = Math.min(rawDt, 0.05);
+  if (rawDt < 0.5) adaptResolution(rawDt);
   if (mode === 'menu') {
     // Plan large autour du club derrière l'écran titre.
     menuT += dt * 0.05;
@@ -440,6 +461,8 @@ function tick() {
     if (mode === 'play') {
       club.update(dt, { playerAtCounter: atCounter() });
       player.update(dt, input, colliders, WORLD);
+      player.pushFrom(club.persons);
+      player.resolve(colliders);
       updateTarget(dt);
       // Pas et oiseaux.
       if (Math.floor(player.stepPhase / Math.PI) !== stepPhase) { stepPhase = Math.floor(player.stepPhase / Math.PI); audio.step(); }
@@ -454,8 +477,10 @@ function tick() {
     building.update(club.s.minute, night);
     courts.setNight(night > 0.35 && club.s.upgrades.lights);
     hud.update(club, ui);
-    $('click-to-play').hidden = input.locked || input.fallback || mode !== 'play' || input.uiOpen;
-    $('look-help').hidden = !(input.fallback && mode === 'play' && !input.uiOpen);
+    const ch = input.locked || input.fallback || mode !== 'play' || input.uiOpen;
+    if ($('click-to-play').hidden !== ch) $('click-to-play').hidden = ch;
+    const lh = !(input.fallback && mode === 'play' && !input.uiOpen);
+    if ($('look-help').hidden !== lh) $('look-help').hidden = lh;
   }
   renderer.render(scene, camera);
 }
@@ -463,4 +488,4 @@ renderer.setAnimationLoop(tick);
 $('loading').hidden = true;
 
 // Accès pour les tests automatisés et la console.
-window.__club = { get club() { return club; }, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld };
+window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld };

@@ -128,7 +128,13 @@ export function createEnvironment(scene, renderer) {
   }
   // Voitures garées (formes lisses simples).
   const carColors = [0xd0d4d9, 0x1d2a3a, 0x8a1c1c, 0xf2f2f2, 0x2f5d9e, 0x3a3f45];
-  [[-15.6, 26.2], [-10.4, 35.8], [7.8, 26.2], [13, 26.2], [-5.2, 26.2], [18.2, 35.8]].forEach(([x, z], i) => scene.add(car(x, z, carColors[i % carColors.length], z > 30 ? Math.PI : 0)));
+  // Obstacles extérieurs pour le joueur (voitures, haies, troncs, poteaux).
+  const colliders = [];
+  const block = (x, z, hx, hz) => colliders.push({ minX: x - hx, maxX: x + hx, minZ: z - hz, maxZ: z + hz });
+  [[-15.6, 26.2], [-10.4, 35.8], [7.8, 26.2], [13, 26.2], [-5.2, 26.2], [18.2, 35.8]].forEach(([x, z], i) => {
+    scene.add(car(x, z, carColors[i % carColors.length], z > 30 ? Math.PI : 0));
+    block(x, z, 1.0, 2.35);
+  });
 
   // --- Arbres et haies -------------------------------------------------------------------------
   const trunkGeo = new THREE.CylinderGeometry(0.18, 0.28, 3.2, 10).translate(0, 1.6, 0);
@@ -155,6 +161,7 @@ export function createEnvironment(scene, renderer) {
   const crowns = new THREE.InstancedMesh(crownGeo, crownMat, spots.length);
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), sv = new THREE.Vector3(), pv = new THREE.Vector3(), col = new THREE.Color();
   spots.forEach(([x, z, s], i) => {
+    block(x, z, 0.32 * s, 0.32 * s);
     q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.random() * 6.28);
     m.compose(pv.set(x, 0, z), q, sv.set(s, s, s)); trunks.setMatrixAt(i, m);
     m.compose(pv.set(x, 4.2 * s, z), q, sv.set(s, s * (0.9 + Math.random() * 0.3), s)); crowns.setMatrixAt(i, m);
@@ -167,6 +174,7 @@ export function createEnvironment(scene, renderer) {
   // Haie le long du parking et clôture de la propriété.
   const hedgeMat = new THREE.MeshStandardMaterial({ color: 0x3f6b2c, roughness: 0.95 });
   for (const [x0, x1] of [[-22, -2], [2, 22]]) {
+    block((x0 + x1) / 2, 22.6, (x1 - x0) / 2, 0.45);
     const hedge = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, 1.1, 0.9), hedgeMat);
     hedge.position.set((x0 + x1) / 2, 0.55, 22.6);
     hedge.castShadow = hedge.receiveShadow = true;
@@ -186,6 +194,7 @@ export function createEnvironment(scene, renderer) {
   for (const s of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 2.6, 10), postMat);
     post.position.set(-6 + s * 2.3, 1.3, 23.2);
+    block(-6 + s * 2.3, 23.2, 0.12, 0.12);
     scene.add(post);
   }
   scene.add(board);
@@ -215,7 +224,7 @@ export function createEnvironment(scene, renderer) {
     scene.fog.color.copy(c.hor);
     sun.position.copy(focus).addScaledVector(sunDir, 80);
     sun.target.position.copy(focus);
-    if (Math.abs(hour - lastEnvHour) > 0.5) {
+    if (Math.abs(hour - lastEnvHour) > 1.5) {
       lastEnvHour = hour;
       const old = envRT;
       envRT = pmrem.fromScene(envScene, 0.04);
@@ -230,7 +239,7 @@ export function createEnvironment(scene, renderer) {
     return { night: 1 - day, hour };
   }
 
-  return { setTime, sun };
+  return { setTime, sun, colliders };
 }
 
 // Voiture : silhouette latérale extrudée aux arêtes arrondies, vitres teintées, roues.

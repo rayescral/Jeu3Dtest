@@ -12,6 +12,7 @@ export class Player {
     this.yaw = Math.PI;      // regarde vers le club-house
     this.pitch = -0.05;
     this.vel = new THREE.Vector2();
+    this.y = 0; this.vy = 0;           // saut
     this.bob = 0;
     this.held = null;        // { box, mesh }
     this.ray = new THREE.Raycaster();
@@ -46,12 +47,27 @@ export class Player {
     this.pos.x = clamp(this.pos.x, bounds.minX, bounds.maxX);
     this.pos.z = clamp(this.pos.z, bounds.minZ, bounds.maxZ);
 
-    const moving = Math.hypot(this.vel.x, this.vel.y);
+    // Saut (Espace) et gravité.
+    const grounded = this.y <= 0;
+    if (grounded && !input.uiOpen && input.down('Space')) this.vy = 4.6;
+    this.vy -= 15 * dt;
+    this.y = Math.max(0, this.y + this.vy * dt);
+    if (this.y === 0 && this.vy < 0) this.vy = 0;
+
+    const moving = grounded ? Math.hypot(this.vel.x, this.vel.y) : 0;
     this.bob += dt * moving * 2.2;
     const bobY = Math.sin(this.bob * 2) * 0.03 * Math.min(1, moving / 3);
-    this.camera.position.set(this.pos.x, EYE + bobY, this.pos.z);
+    this.camera.position.set(this.pos.x, EYE + this.y + bobY, this.pos.z);
     this.camera.rotation.set(this.pitch, this.yaw, 0);
     this.stepPhase = this.bob;
+  }
+
+  // Les personnages ne se traversent pas : on écarte le joueur.
+  pushFrom(people) {
+    for (const p of people) {
+      const dx = this.pos.x - p.x, dz = this.pos.z - p.z, d = Math.hypot(dx, dz), min = RADIUS + 0.28;
+      if (d < min && d > 1e-4) { this.pos.x = p.x + (dx / d) * min; this.pos.z = p.z + (dz / d) * min; }
+    }
   }
 
   // Repousse le joueur (cercle) hors des rectangles d'obstacles.

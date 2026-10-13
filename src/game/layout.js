@@ -25,6 +25,10 @@ export const LOBBY = [
 ];
 export const DELIVERY = { x: 6.2, z: 17.6 };           // palette de livraison, devant le club
 
+// Mobilier du club-house (le rendu et les collisions utilisent les mêmes positions).
+export const PLANTS = [{ x: -9.3, z: 13.3 }, { x: 9.3, z: 13.3 }, { x: -1.9, z: 0.6 }, { x: 1.9, z: 0.6 }];
+export const LOBBY_BENCH = { x: 3.4, z: 13.5, w: 3.6, d: 0.42 };
+
 // Étagères de la boutique : 4 contre le mur de droite, 2 contre le mur du fond.
 // facing : direction vers laquelle l'étagère est tournée (angle autour de y, 0 = vers +z).
 export const SHELF_SLOTS = [
@@ -91,6 +95,9 @@ export function staticColliders() {
   wall(CLUB.minX - t / 2, CLUB.minX + t / 2, CLUB.minZ, CLUB.maxZ);
   wall(CLUB.maxX - t / 2, CLUB.maxX + t / 2, CLUB.minZ, CLUB.maxZ);
   out.push({ ...COUNTER });
+  for (const p of PLANTS) out.push({ minX: p.x - 0.3, maxX: p.x + 0.3, minZ: p.z - 0.3, maxZ: p.z + 0.3 });
+  const b = LOBBY_BENCH;
+  out.push({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2 });
   return out;
 }
 
@@ -113,6 +120,9 @@ export function courtColliders(slotId, sport) {
       { minX: x0 - t, maxX: x0 + t, minZ: z0, maxZ: z1 },
       { minX: x1 - t, maxX: x1 + t, minZ: z0, maxZ: z1 },
       { minX: s.cx - 6.4, maxX: s.cx + 6.4, minZ: s.cz - 0.06, maxZ: s.cz + 0.06 },   // filet
+      { minX: s.cx - 7.8, maxX: s.cx - 7.0, minZ: s.cz - 0.4, maxZ: s.cz + 0.4 },        // chaise d'arbitre
+      ...[-2.2, 2.2].map(z => ({ minX: s.cx - 8.15, maxX: s.cx - 7.65, minZ: s.cz + z - 0.8, maxZ: s.cz + z + 0.8 })),  // bancs (côté chaise)
+      ...poles(s, A.w / 2 + 0.6, 9),
     ];
   }
   // Padel : 10 x 20 m, ouvertures de 1,5 m de chaque côté au niveau du filet.
@@ -123,5 +133,16 @@ export function courtColliders(slotId, sport) {
     { minX: x0 - t, maxX: x0 + t, minZ: s.cz + o, maxZ: z1 }, { minX: x0 - t, maxX: x0 + t, minZ: z0, maxZ: s.cz - o },
     { minX: x1 - t, maxX: x1 + t, minZ: s.cz + o, maxZ: z1 }, { minX: x1 - t, maxX: x1 + t, minZ: z0, maxZ: s.cz - o },
     { minX: s.cx - 4.6, maxX: s.cx + 4.6, minZ: s.cz - 0.05, maxZ: s.cz + 0.05 },          // filet
+    ...poles(s, 5.8, 6),
   ];
+}
+
+// Mâts d'éclairage, aux quatre coins extérieurs d'un terrain.
+function poles(s, dx, dz) {
+  const out = [];
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = s.cx + sx * dx, z = s.cz + sz * dz;
+    out.push({ minX: x - 0.15, maxX: x + 0.15, minZ: z - 0.15, maxZ: z + 0.15 });
+  }
+  return out;
 }
