@@ -553,7 +553,7 @@ function tick() {
   if (mode === 'menu') {
     // Plan large autour du club derrière l'écran titre.
     menuT += dt * 0.05;
-    camera.position.set(Math.sin(menuT) * 26, 7 + Math.sin(menuT * 0.7) * 1.5, 30 + Math.cos(menuT) * 8);
+    camera.position.set(Math.sin(menuT) * 20, 7 + Math.sin(menuT * 0.7) * 1.5, 28 + Math.cos(menuT) * 6);   // hors des arbres de la rue
     camera.lookAt(0, 2, 4);
     env.setTime(10.5 * 60 + Math.sin(menuT) * 30, new THREE.Vector3(0, 0, 5));
   } else {
