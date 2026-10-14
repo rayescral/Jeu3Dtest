@@ -1,0 +1,60 @@
+METTRE TENNIS CLUB SIMULATOR SUR ITCH.IO — GUIDE PAS À PAS
+==========================================================
+
+Durée : environ 15 minutes. Tout ce dont tu as besoin est dans ce dossier.
+
+1) CRÉER TON COMPTE
+   - Va sur https://itch.io et clique sur « Register » (en haut à droite).
+   - Choisis un nom d'utilisateur : il apparaîtra dans l'adresse de ton jeu
+     (exemple : https://tonpseudo.itch.io/tennis-club-simulator).
+   - Coche « I'm interested in distributing content on itch.io » si on te le demande.
+   - Confirme ton adresse e-mail (lien reçu par e-mail).
+
+2) CRÉER LA PAGE DU JEU
+   - Clique sur la petite flèche à côté de ton pseudo (en haut à droite) › « Upload new project ».
+   - Title : Tennis Club Simulator
+   - Short description or tagline : copie la phrase d'accroche du fichier « 3 - Texte de la page.txt ».
+   - Classification : Games
+   - Kind of project : HTML   ← important : c'est ce qui permet de jouer dans le navigateur.
+   - Release status : In development
+
+3) PRIX
+   - Choisis « No payments » (gratuit) ou « Donations » (gratuit avec possibilité de te faire un don).
+
+4) ENVOYER LE JEU
+   - Rubrique « Uploads » › « Upload files » › choisis le fichier
+     « 1 - jeu-web (à envoyer sur itch).zip » (ne le décompresse pas !).
+   - Une fois envoyé, coche la case « This file will be played in the browser ».
+
+5) RÉGLAGES DE LA FENÊTRE DE JEU (rubrique « Embed options »)
+   - Viewport dimensions : 1280 × 720
+   - Coche « Mobile friendly » : NON (le jeu se joue au clavier et à la souris)
+   - Coche « Fullscreen button » : OUI
+   - Coche « Automatically start on page load » : NON (le joueur clique sur « Run game »)
+
+6) TEXTES ET IMAGES
+   - Description : copie la description du fichier « 3 - Texte de la page.txt ».
+   - Genre : Simulation ; Tags : copie la liste du fichier texte.
+   - Cover image : « couverture-630x500.png »
+   - Screenshots : ajoute les 5 images du dossier « 2 - Captures d'écran ».
+
+7) VISIBILITÉ ET ENREGISTREMENT
+   - En bas : « Visibility & access » › laisse d'abord sur « Draft » (brouillon).
+   - Clique sur « Save & view page ».
+   - Teste le jeu sur ta page : clique sur « Run game », lance une partie, vérifie que la souris
+     est bien capturée quand tu cliques dans le jeu, puis essaie le bouton plein écran.
+   - Si tout va bien : retourne dans « Edit game » › Visibility › « Public » › Save.
+     Ton jeu est en ligne ! Envoie le lien à tes amis.
+
+METTRE À JOUR LE JEU PLUS TARD
+   - Demande-moi le nouveau zip « jeu-web », puis sur itch.io : « Edit game » › Uploads ›
+     remplace l'ancien fichier par le nouveau (ou supprime-le et envoie le nouveau, en recochant
+     « This file will be played in the browser »). Le lien de ta page ne change pas.
+   - Tu peux annoncer la nouveauté dans un « Devlog » (onglet sur ta page de jeu).
+
+BON À SAVOIR
+   - Les sauvegardes des joueurs restent dans leur propre navigateur.
+   - La version itch.io ne se met pas à jour toute seule comme ton programme Windows : il faut
+     renvoyer le zip à chaque nouvelle version que tu veux publier.
+   - Si un jour tu veux faire payer le jeu, itch.io te demandera un compte PayPal ou Stripe
+     (si tu es mineur, demande à un parent).

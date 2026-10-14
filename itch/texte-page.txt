@@ -1,0 +1,83 @@
+=====================================================================
+TITRE
+=====================================================================
+Tennis Club Simulator
+
+=====================================================================
+PHRASE D'ACCROCHE (champ « Short description or tagline »)
+=====================================================================
+Reprends un petit club de tennis et fais-en le plus grand club de la région !
+
+English: Take over a tiny tennis club and turn it into the best club in town!
+
+=====================================================================
+DESCRIPTION EN FRANÇAIS (à coller dans « Description »)
+=====================================================================
+Tu viens de reprendre le Tennis Club des Platanes : un seul court en terre battue, deux étagères vides et quatre licenciés. À toi d'en faire le club le plus réputé de la région !
+
+🎾 GÈRE TON CLUB À LA PREMIÈRE PERSONNE
+• Commande ton matériel sur l'ordinateur de l'accueil et récupère les cartons livrés devant le club
+• Remplis les rayons : balles, boissons, grips, raquettes de marque, casquettes, chaussures, sacs…
+• Encaisse les clients au comptoir : scanne les articles, paiement par carte ou en espèces (attention à la monnaie !)
+• Fixe tes prix : trop cher, les clients repartent les mains vides
+
+🍺 BUVETTE, SNACK ET PARKING
+• Lance la construction de ta buvette et de ton snack, et regarde les ouvriers bâtir le chantier petit à petit
+• Sers bières, cafés, sandwichs, paninis et pizzas, sur une terrasse sous les parasols
+• Installe une barrière et fais payer le parking aux voitures qui arrivent
+
+🏟️ FAIS GRANDIR LE CLUB
+• Construis de nouveaux courts en résine et des terrains de padel
+• Brosse les terrains usés avant que les joueurs ne râlent
+• Fais sortir les joueurs qui dépassent leur créneau (ou embauche un agent de sécurité !)
+• Embauche du personnel : accueil, serveur, cuisinier, agent d'entretien
+• Gagne des niveaux, débloque de nouveaux produits et aménagements, et attire toujours plus de licenciés
+
+📅 CHAQUE JOURNÉE EST DIFFÉRENTE
+Tournoi interne, canicule, averses, visite d'une championne, promo fournisseur, inspection de la ligue… Relève le défi du jour pour gagner une prime, et soigne tes clients VIP pour récolter de gros pourboires !
+
+🕹️ COMMANDES
+ZQSD / WASD : se déplacer · Souris : regarder · Maj : courir · Espace : sauter
+E : interagir · Clic gauche : ranger, scanner, encaisser · Clic droit : reprendre un article
+G : poser le carton · Tab : ordinateur du club · Échap : pause
+
+💾 La partie est sauvegardée automatiquement dans ton navigateur à la fin de chaque journée.
+
+Jeu en développement : n'hésite pas à laisser un commentaire avec tes idées et les bugs que tu trouves !
+
+=====================================================================
+DESCRIPTION EN ANGLAIS (optionnelle, à ajouter sous la version française)
+=====================================================================
+You just took over the Platanes Tennis Club: one clay court, two empty shelves and four members. Your job: turn it into the best club in the region!
+
+🎾 RUN YOUR CLUB IN FIRST PERSON
+• Order stock on the front-desk computer and carry the delivered boxes inside
+• Fill the shelves: balls, drinks, grips, brand rackets, caps, shoes, bags…
+• Check out customers at the counter: scan items, take card or cash (and give the right change!)
+• Set your own prices — too expensive and customers walk away
+
+🍺 BAR, SNACK & PARKING
+• Build a bar and a snack stand and watch the workers raise them step by step
+• Serve beers, coffees, sandwiches, paninis and pizzas on a sunny terrace
+• Install a barrier and charge for parking
+
+🏟️ GROW YOUR CLUB
+• Build hard courts and padel courts, brush worn courts, kick out players who overstay their slot
+• Hire staff, level up, unlock new products and attract more and more members
+
+📅 EVERY DAY IS DIFFERENT
+Club tournament, heatwave, rain, a pro player visiting, supplier sales, league inspection… Complete the daily challenge for a bonus!
+
+The game is in French. Controls: WASD/ZQSD to move, mouse to look, E to interact, left click to stock/scan/pay, Tab for the club computer, Esc to pause.
+
+=====================================================================
+GENRE ET TAGS (champs « Genre » et « Tags »)
+=====================================================================
+Genre : Simulation
+Tags : management, simulation, sports, tennis, 3d, first-person, shop, tycoon, cozy, french
+
+=====================================================================
+PRIX CONSEILLÉ
+=====================================================================
+« No payments » au début (jeu gratuit), ou « Donations » si tu veux permettre aux joueurs de te soutenir.
+Tu pourras passer à un prix plus tard, quand le jeu sera plus complet.
