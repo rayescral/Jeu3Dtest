@@ -41,6 +41,8 @@ ZQSD / WASD : se déplacer · Souris : regarder · Maj : courir · Espace : saut
 E : interagir · Clic gauche : ranger, scanner, encaisser · Clic droit : reprendre un article
 G : poser le carton · Tab : ordinateur du club · Échap : pause
 
+🌍 Jeu disponible en français et en anglais (choix de la langue dans le menu).
+
 💾 La partie est sauvegardée automatiquement dans ton navigateur à la fin de chaque journée.
 
 Jeu en développement : n'hésite pas à laisser un commentaire avec tes idées et les bugs que tu trouves !
@@ -48,7 +50,7 @@ Jeu en développement : n'hésite pas à laisser un commentaire avec tes idées 
 =====================================================================
 DESCRIPTION EN ANGLAIS (optionnelle, à ajouter sous la version française)
 =====================================================================
-You just took over the Platanes Tennis Club: one clay court, two empty shelves and four members. Your job: turn it into the best club in the region!
+You just took over the Plane Trees Tennis Club: one clay court, two empty shelves and four members. Your job: turn it into the best club in the region!
 
 🎾 RUN YOUR CLUB IN FIRST PERSON
 • Order stock on the front-desk computer and carry the delivered boxes inside
@@ -68,13 +70,13 @@ You just took over the Platanes Tennis Club: one clay court, two empty shelves a
 📅 EVERY DAY IS DIFFERENT
 Club tournament, heatwave, rain, a pro player visiting, supplier sales, league inspection… Complete the daily challenge for a bonus!
 
-The game is in French. Controls: WASD/ZQSD to move, mouse to look, E to interact, left click to stock/scan/pay, Tab for the club computer, Esc to pause.
+The game is available in English and French (switch language from the main menu). Controls: WASD/ZQSD to move, mouse to look, E to interact, left click to stock/scan/pay, Tab for the club computer, Esc to pause.
 
 =====================================================================
 GENRE ET TAGS (champs « Genre » et « Tags »)
 =====================================================================
 Genre : Simulation
-Tags : management, simulation, sports, tennis, 3d, first-person, shop, tycoon, cozy, french
+Tags : management, simulation, sports, tennis, 3d, first-person, shop, tycoon, cozy, french, english
 
 =====================================================================
 PRIX CONSEILLÉ
