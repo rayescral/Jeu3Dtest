@@ -14,7 +14,7 @@ import { createEnvironment } from './render/environment.js';
 import { createBuilding } from './render/building.js';
 import { createShelves } from './render/shelves.js';
 import { createCourts } from './render/courts.js';
-import { createPersonView } from './render/people.js';
+import { createPersonView, setViewer } from './render/people.js';
 import { boxMesh } from './render/products.js';
 import { createInput } from './core/input.js';
 import { Player } from './core/player.js';
@@ -52,8 +52,14 @@ const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'hi
 const QUALITIES = ['high', 'ultra', 'low'];
 let quality = 'high', qualityChosen = false;
 try { const q = localStorage.getItem('tennis-club-quality'); if (QUALITIES.includes(q)) { quality = q; qualityChosen = true; } } catch { /* stockage indisponible */ }
+// Résolution dynamique : si l'image ralentit, le jeu baisse un peu sa définition interne (et la remonte quand
+// tout redevient fluide). Ainsi il s'adapte à chaque ordinateur sans que le joueur ait à régler quoi que ce soit.
+let resScale = 1;
+const baseRatio = () => (quality === 'ultra' ? Math.min(devicePixelRatio, 2) : quality === 'high' ? Math.min(devicePixelRatio, 1) : 0.75);
 function applyQuality() {
-  renderer.setPixelRatio(quality === 'ultra' ? Math.min(devicePixelRatio, 2) : quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75);
+  renderer.setPixelRatio(baseRatio() * resScale);
+  // Ombres : recalculées à chaque image en ultra, une image sur deux sinon (invisible à l'œil, deux fois moins de travail).
+  renderer.shadowMap.autoUpdate = quality === 'ultra';
   renderer.shadowMap.enabled = quality !== 'low';
   const sz = quality === 'ultra' ? 4096 : 2048;
   if (env?.sun && env.sun.shadow.mapSize.x !== sz) { env.sun.shadow.mapSize.set(sz, sz); env.sun.shadow.map?.dispose(); env.sun.shadow.map = null; }
@@ -559,8 +565,26 @@ function watchPerf(dt) {
 const clock = new THREE.Clock();
 let menuT = 0, birdT = 4, stepPhase = 0, lastW = 0, lastH = 0;
 
+const fps = { t: 0, n: 0, frame: 0 };
+function adaptResolution(realDt) {
+  fps.t += realDt; fps.n++;
+  if (fps.t < 2) return;
+  const rate = fps.n / fps.t;
+  fps.t = 0; fps.n = 0;
+  if (quality === 'ultra' || document.hidden) return;
+  const min = quality === 'low' ? 0.6 : 0.55;
+  let next = resScale;
+  if (rate < 45 && resScale > min) next = Math.max(min, resScale * 0.85);
+  else if (rate > 57 && resScale < 1) next = Math.min(1, resScale * 1.1);
+  if (Math.abs(next - resScale) > 0.01) { resScale = next; renderer.setPixelRatio(baseRatio() * resScale); fit(); }
+}
+
 function tick() {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  const realDt = clock.getDelta();
+  const dt = Math.min(realDt, 0.05);
+  adaptResolution(realDt);
+  if (!renderer.shadowMap.autoUpdate && fps.frame++ % 2 === 0) renderer.shadowMap.needsUpdate = true;
+  setViewer(camera.position);
   // Si la fenêtre a changé de taille sans prévenir (passage en plein écran), on réajuste l'image.
   if (lastW !== innerWidth || lastH !== innerHeight) { lastW = innerWidth; lastH = innerHeight; fit(); }
   if (mode === 'menu') {
@@ -612,4 +636,4 @@ function tick() {
 })();
 
 // Accès pour les tests automatisés et la console.
-window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld, viewOf: p => personViews.get(p.id), get traffic() { return traffic; } };
+window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, camera, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld, viewOf: p => personViews.get(p.id), get traffic() { return traffic; } };

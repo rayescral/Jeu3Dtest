@@ -119,6 +119,12 @@ export function realisticBody(person, rnd) {
     // Cheveux blancs du modèle « bob02 » : teinte au hasard (ou blanc pour les plus âgés).
     if (n.includes('bob02') && !name.endsWith('_e')) o.material = tint(o.material, pick(HAIR));
   });
+  // Pièces fines (yeux, sourcils, cils) et pièces qui projettent une ombre, pour le niveau de détail.
+  const fine = [], casters = [];
+  body.traverse(o => { if (!o.isMesh) return; if (/^(eyes|brows|lashes)/.test(o.material.name)) fine.push(o); if (o.castShadow) casters.push(o); });
+  // Ombre portée par le corps et les vêtements seulement (cheveux et chaussures : invisibles dans l'ombre).
+  for (const o of casters) if (/^(hair|shoes)/.test(o.material.name)) o.castShadow = false;
+  const shadowed = casters.filter(o => o.castShadow);
   const bones = {};
   for (const n of Object.keys(data.joints)) bones[n] = body.getObjectByName(n);
   const q = new THREE.Quaternion(), qa = new THREE.Quaternion(), e = new THREE.Euler();
@@ -133,6 +139,10 @@ export function realisticBody(person, rnd) {
   };
   return {
     body,
+    setDetail(lod) {
+      for (const o of fine) o.visible = lod === 0;
+      for (const o of shadowed) o.castShadow = lod < 2;
+    },
     hand: body.getObjectByName('grip_r'),
     height: data.height,
     setPose(a) {

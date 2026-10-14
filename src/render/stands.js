@@ -10,6 +10,7 @@ import { pbr, modelAtHeight, breakTiling } from './assets.js';
 import { createPersonView } from './people.js';
 import { clamp, fmtMoney, fmtMoney0 } from '../core/util.js';
 import { L, EN } from '../core/i18n.js';
+import { mergeStatic } from './batch.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o });
 const H = 2.8;                    // hauteur des murs
@@ -357,6 +358,7 @@ export function createStands(scene, interactables, state) {
     const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wirePts), 48, 0.006, 4), postMat);
     terrace.add(wire);
     v.bulbs = bulbs;
+    mergeStatic(terrace);
     terrace.visible = false;
     root.add(terrace);
     v.terrace = terrace;
@@ -410,6 +412,9 @@ export function createStands(scene, interactables, state) {
       interactables.push(v.hit);
       v.root.add(v.hit);
       v.menu.redraw(state.prices);
+      // Construction terminée : les murs, le comptoir et le décor ne bougent plus, on les fusionne.
+      for (const part of v.parts) { part.scale.y = 1; part.visible = true; }
+      mergeStatic(v.building);
     }
   }
 

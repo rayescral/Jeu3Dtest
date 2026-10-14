@@ -2,6 +2,7 @@
 // vitrages avec montants, peinture vernie (reflets du ciel), jantes alliage, pneus, optiques et plaques.
 // Repère : avant vers +x, largeur sur z, hauteur sur y (comme l'ancien modèle).
 import * as THREE from 'three';
+import { mergeStatic } from './batch.js';
 
 // Silhouettes : longueur, largeur, garde au sol, profil du haut de caisse (x, y), vitrage, toit, roues.
 const TYPES = {
@@ -29,7 +30,7 @@ function profile(pts, x) {
 }
 
 // Section arrondie (super-ellipse) : renvoie [nx, ny] pour un angle, normalisés dans [-1, 1].
-const SECTION = 28;
+const SECTION = 20;
 function ringPoint(i, n = 4) {
   const t = (i / SECTION) * Math.PI * 2;
   const c = Math.cos(t), s = Math.sin(t);
@@ -99,7 +100,7 @@ function bodyGeometry(T) {
   };
   const xs = [];
   // Stations : tous les 5 cm, plus serrées vers les extrémités (nez et poupe arrondis).
-  for (let x = -L2; x <= L2 + 1e-6; x += 0.05) xs.push(x);
+  for (let x = -L2; x <= L2 + 1e-6; x += 0.075) xs.push(x);
   for (const e of [0.003, 0.012, 0.025, 0.04]) { xs.push(L2 - e); xs.push(-L2 + e); }
   xs.sort((a, b) => a - b);
   const stationAt = x => {
@@ -153,7 +154,7 @@ function bodyGeometry(T) {
     return lerp(T.roof, profile(T.top, T.r), smooth((T.c - x) / (T.c - T.r)));
   };
   const cab = [];
-  for (let x = T.r; x <= T.wf + 1e-6; x += 0.04) {
+  for (let x = T.r; x <= T.wf + 1e-6; x += 0.05) {
     const base = profile(T.top, x) - 0.03;
     const top = Math.max(base + 0.02, roofY(x));
     cab.push({ x, yb: base, yt: top, wb: hw0 * 0.84, wt: hw0 * 0.7, n: 5 });
@@ -186,7 +187,7 @@ function wheelParts(R) {
   }
   prof.unshift(new THREE.Vector2(rr + 0.01, -w / 2 + 0.01));
   prof.push(new THREE.Vector2(rr + 0.01, w / 2 - 0.01));
-  const tire = new THREE.LatheGeometry(prof, 36).rotateX(Math.PI / 2);
+  const tire = new THREE.LatheGeometry(prof, 24).rotateX(Math.PI / 2);
   // Jante : disque extrudé percé de 5 ouvertures.
   const shape = new THREE.Shape();
   shape.absarc(0, 0, rr, 0, Math.PI * 2, false);
@@ -197,7 +198,7 @@ function wheelParts(R) {
     hole.absarc(0, 0, rr * 0.36, a1 - 0.05, a0 + 0.05, true);
     shape.holes.push(hole);
   }
-  const rim = new THREE.ExtrudeGeometry(shape, { depth: 0.035, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.01, bevelSegments: 2, curveSegments: 24 });
+  const rim = new THREE.ExtrudeGeometry(shape, { depth: 0.035, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.01, bevelSegments: 1, curveSegments: 12 });
   const hub = new THREE.CylinderGeometry(rr * 0.2, rr * 0.24, 0.06, 16).rotateX(Math.PI / 2);
   const disc = new THREE.CylinderGeometry(rr * 0.8, rr * 0.8, 0.03, 24).rotateX(Math.PI / 2);
   const barrel = new THREE.CylinderGeometry(rr + 0.012, rr + 0.012, w - 0.03, 28, 1, true).rotateX(Math.PI / 2);
@@ -315,7 +316,7 @@ export function carModel(color, type = 'sedan') {
   const { lower, upper, axles, heads, tails } = bodyCache.get(type);
   const g = new THREE.Group();
   const pm = paint(color);
-  const bodyMats = [pm, m.glass, m.trim, m.dark, m.dark, m.dark, m.grille];
+  const bodyMats = [pm, m.glass, m.trim, m.dark, m.dark, m.dark, m.dark];
   const low = new THREE.Mesh(lower, bodyMats), up = new THREE.Mesh(upper, bodyMats);
   low.castShadow = up.castShadow = true;
   low.receiveShadow = up.receiveShadow = true;
@@ -360,17 +361,17 @@ export function carModel(color, type = 'sedan') {
     }
     for (const dx of [T.wf - 0.12, (T.a + T.c) / 2 + 0.05, T.c + (type === 'suv' || type === 'wagon' ? 0.75 : 0.2)]) {
       const yTop = profile(T.top, dx) - 0.03, yBot = T.clear + 0.1;
-      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.006, yTop - yBot, 0.006), m.seam);
+      const seam = new THREE.Mesh(new THREE.BoxGeometry(0.006, yTop - yBot, 0.006), m.under);
       seam.position.set(dx, (yTop + yBot) / 2, side * (hw * 0.97 - 0.001));
       g.add(seam);
     }
   }
   // Calandre et entrée d'air (cadres arrondis), diffuseur arrière.
-  const grille = new THREE.Mesh(roundedBox(0.06, 0.15, T.W * 0.46, 0.04), m.grille);
+  const grille = new THREE.Mesh(roundedBox(0.06, 0.15, T.W * 0.46, 0.04), m.under);
   grille.position.set(L2 - 0.012, profile(T.top, L2) - 0.17, 0);
-  const intake = new THREE.Mesh(roundedBox(0.06, 0.1, T.W * 0.6, 0.04), m.grille);
+  const intake = new THREE.Mesh(roundedBox(0.06, 0.1, T.W * 0.6, 0.04), m.under);
   intake.position.set(L2 - 0.02, T.clear + 0.07, 0);
-  const diff = new THREE.Mesh(roundedBox(0.06, 0.09, T.W * 0.7, 0.03), m.dark);
+  const diff = new THREE.Mesh(roundedBox(0.06, 0.09, T.W * 0.7, 0.03), m.under);
   diff.position.set(-L2 + 0.02, T.clear + 0.06, 0);
   g.add(grille, intake, diff);
   for (const [px, ry] of [[L2 + 0.012, Math.PI / 2], [-L2 - 0.012, -Math.PI / 2]]) {
@@ -380,5 +381,6 @@ export function carModel(color, type = 'sedan') {
     g.add(plate);
   }
   g.userData.type = type;
+  mergeStatic(g);   // une voiture = une dizaine de maillages au lieu d'une cinquantaine
   return g;
 }

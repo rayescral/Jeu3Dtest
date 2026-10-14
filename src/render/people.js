@@ -11,6 +11,9 @@ const TOPS = [0xffffff, 0x1f6b4a, 0x2f6fe0, 0xe04a4a, 0xf2c94c, 0x7a4fd6, 0x1517
 const BOTTOMS = [0xffffff, 0x1b2a44, 0x15171a, 0x3a4048, 0x2a4f7a];
 
 const geo = {};
+// Position de la caméra (mise à jour par la boucle de jeu) : les personnages lointains sont simplifiés.
+const viewer = new THREE.Vector3();
+export const setViewer = v => viewer.copy(v);
 const mats = new Map();
 const mat = (color, rough = 0.7) => {
   const k = color + ':' + rough;
@@ -191,6 +194,10 @@ function makeView(person, rnd, rig) {
       const sp = Math.min(3, Math.hypot(vx, vz));
       this.speed = damp(this.speed, sp, 10, dt);
       root.position.set(p.x + this.offsetX, 0, p.z + this.offsetZ);
+      // Niveau de détail : yeux, sourcils, cils et ombre seulement de près.
+      const d2 = (root.position.x - viewer.x) ** 2 + (root.position.z - viewer.z) ** 2;
+      const lod = d2 < 14 * 14 ? 0 : d2 < 30 * 30 ? 1 : 2;
+      if (lod !== this.lod) { this.lod = lod; rig.setDetail?.(lod); }
       let targetRot = p.rot;
       if (p.look && p.action === 'browse') targetRot = Math.atan2(p.look.x - p.x, p.look.z - p.z);
       root.rotation.y = dampAngle(root.rotation.y, targetRot, 10, dt);

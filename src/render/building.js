@@ -7,6 +7,7 @@ import { productMesh } from './products.js';
 import { pbr, modelAtHeight, breakTiling } from './assets.js';
 import { fmtMoney, fmtClock } from '../core/util.js';
 import { L } from '../core/i18n.js';
+import { mergeStatic } from './batch.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o });
 
@@ -423,6 +424,9 @@ export function createBuilding(scene, interactables) {
       }
     }
   }
+
+  // Pièces fixes du club-house fusionnées par matériau ; ce qui bouge ou se clique reste à part.
+  mergeStatic(group, o => o === counterGroup || o === laptop || o === drawer || o === term || o === signGroup);
 
   let lastClock = -1;
   return {

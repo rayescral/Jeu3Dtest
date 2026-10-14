@@ -92,7 +92,9 @@ export function createSky(scene, renderer) {
       uniforms.uSunColor.value.copy(sunColor).multiplyScalar(THREE.MathUtils.clamp(sunDir.y * 8, 0, 1) * (1 - wNight));
       fogColor.setRGB(0, 0, 0).add(horizon('day').multiplyScalar(wDay)).add(horizon('sunset').multiplyScalar(wSunset)).add(horizon('night').multiplyScalar(wNight));
       uniforms.uGround.value.copy(fogColor).multiplyScalar(0.7);
-      const key = [wDay, wSunset, wNight].map(v => v.toFixed(1)).join('|') + '|' + Math.round(phi * 24);
+      // Éclairage d'ambiance recalculé rarement (pas de 0,25 sur les mélanges de ciels, 30° de rotation du soleil) :
+      // chaque recalcul coûte un petit à-coup.
+      const key = [wDay, wSunset, wNight].map(v => Math.round(v * 4)).join('|') + '|' + Math.round(phi * 12);
       if (key !== lastKey) {
         lastKey = key;
         const old = envRT;

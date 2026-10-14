@@ -7,6 +7,7 @@ import { clayTexture, hardTexture, padelTexture, wearTexture, meshTexture, grave
 import { clamp, rand, fmtMoney0 } from '../core/util.js';
 import { pbr, images, assets, modelAtHeight } from './assets.js';
 import { L } from '../core/i18n.js';
+import { mergeStatic } from './batch.js';
 
 // Détail photographique ajouté à une surface dessinée (relief et rugosité répétés finement).
 function detail(mat, name, repeat, normalScale = 1) {
@@ -337,10 +338,12 @@ export function createCourts(scene, state, interactables, onBallHit) {
     if (st.built && !v.built) {
       if (v.plot) { v.root.remove(v.plot.g); v.plot = null; }
       v.built = v.sport === 'tennis' ? buildTennis(v.def) : buildPadel(v.def);
+      // Pièces fixes fusionnées (grillages, poteaux, chaises…) ; projecteurs, surface et usure restent à part.
+      mergeStatic(v.built.g, o => v.built.lights.includes(o) || o === v.built.wear || o === v.built.surface);
       v.root.add(v.built.g);
       interactables.push(v.built.surface);
     }
-    if (!st.built && !v.plot) { v.plot = buildPlot(v.def, v.sport); v.root.add(v.plot.g); }
+    if (!st.built && !v.plot) { v.plot = buildPlot(v.def, v.sport); mergeStatic(v.plot.g); v.root.add(v.plot.g); }
     if (v.plot) updatePlotSign(v);
     if (v.built) { v.built.wear.material.opacity = clamp(st.wear * 1.1, 0, 1); applyNight(v); }
   }
