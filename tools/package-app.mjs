@@ -1,5 +1,5 @@
 // Fabrique la version « application » Windows du jeu : un seul fichier « Tennis Club Simulator.exe »
-// (quelques Mo). Il utilise le moteur web déjà présent dans Windows 10 et 11 (WebView2), grâce à
+// (quelques Mo). À chaque lancement, il récupère la dernière version du jeu publiée sur GitHub. Il utilise le moteur web déjà présent dans Windows 10 et 11 (WebView2), grâce à
 // Neutralinojs. Lancer : npm run app   (résultat dans dist/)
 import { execSync } from 'node:child_process';
 import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync, renameSync, readdirSync } from 'node:fs';
@@ -7,9 +7,11 @@ import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync, renameSync, readd
 const VERSION = '6.3.0';
 const stage = 'dist/neu';
 rmSync('dist', { recursive: true, force: true });
-mkdirSync(`${stage}/app`, { recursive: true });
+mkdirSync(`${stage}/app/game`, { recursive: true });
 mkdirSync(`${stage}/bin`, { recursive: true });
-for (const f of ['index.html', 'style.css', 'jeu.js']) cpSync(f, `${stage}/app/${f}`);
+// Lanceur (mise à jour automatique depuis GitHub) + copie du jeu pour jouer sans connexion.
+cpSync('desktop/loader.html', `${stage}/app/index.html`);
+for (const f of ['index.html', 'style.css', 'jeu.js']) cpSync(f, `${stage}/app/game/${f}`);
 cpSync('desktop/icon.png', `${stage}/app/icon.png`);
 cpSync('desktop/neutralino.config.json', `${stage}/neutralino.config.json`);
 

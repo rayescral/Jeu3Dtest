@@ -12,6 +12,8 @@ Au départ, le club des Platanes a un seul court en terre battue, deux étagère
 
 Le jeu existe aussi en vrai programme : un seul fichier `Tennis Club Simulator.exe` (environ 3 Mo), qui s'ouvre dans sa propre fenêtre en plein écran, sans navigateur. Il utilise le moteur web déjà présent dans Windows 10 et 11 (WebView2). Les sauvegardes restent sur l'ordinateur.
 
+**Mises à jour automatiques** : à chaque lancement, le programme télécharge la dernière version du jeu publiée sur GitHub (branche `claude/gallant-pasteur-0xlwe2`) ; il n'y a donc rien à réinstaller. Sans connexion, il utilise la dernière version téléchargée (ou celle livrée avec le programme). Le lanceur est `desktop/loader.html`.
+
 Au premier lancement, Windows peut afficher « Windows a protégé votre ordinateur » (le programme n'est pas signé) : clique sur « Informations complémentaires », puis « Exécuter quand même ».
 
 Pour fabriquer ce fichier : `npm run app` (résultat dans `dist/`). Il est construit avec [Neutralinojs](https://neutralino.js.org) à partir des mêmes `index.html`, `style.css` et `jeu.js` ; la configuration de la fenêtre est dans `desktop/neutralino.config.json`.
