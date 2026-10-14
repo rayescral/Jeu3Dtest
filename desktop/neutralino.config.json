@@ -1,0 +1,41 @@
+{
+  "$schema": "https://raw.githubusercontent.com/neutralinojs/neutralinojs/main/schemas/neutralino.config.schema.json",
+  "applicationId": "fr.tennisclub.simulator",
+  "version": "1.0.0",
+  "defaultMode": "window",
+  "port": 47321,
+  "documentRoot": "/app/",
+  "url": "/",
+  "enableServer": true,
+  "enableNativeAPI": false,
+  "tokenSecurity": "one-time",
+  "logging": { "enabled": false, "writeToLogFile": false },
+  "nativeAllowList": [],
+  "globalVariables": {},
+  "modes": {
+    "window": {
+      "title": "Tennis Club Simulator",
+      "width": 1600,
+      "height": 900,
+      "minWidth": 960,
+      "minHeight": 540,
+      "center": true,
+      "fullScreen": true,
+      "alwaysOnTop": false,
+      "icon": "/app/icon.png",
+      "enableInspector": false,
+      "borderless": false,
+      "maximize": false,
+      "hidden": false,
+      "resizable": true,
+      "exitProcessOnClose": true
+    }
+  },
+  "cli": {
+    "binaryName": "TennisClubSimulator",
+    "resourcesPath": "/app/",
+    "extensionsPath": "/extensions/",
+    "binaryVersion": "6.3.0",
+    "clientVersion": "6.3.0"
+  }
+}

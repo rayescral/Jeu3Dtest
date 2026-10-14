@@ -1,7 +1,0 @@
-{
-  "name": "tennis-club-simulator",
-  "productName": "Tennis Club Simulator",
-  "version": "1.0.0",
-  "description": "Jeu de gestion de club de tennis et de padel en 3D",
-  "main": "main.cjs"
-}
