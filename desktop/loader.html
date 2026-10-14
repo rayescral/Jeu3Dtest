@@ -9,7 +9,7 @@
   </style>
 </head>
 <body>
-  <div id="msg">Recherche de mises à jour…</div>
+  <div id="msg"></div>
   <script>
     // Lanceur de l'application : au démarrage, il télécharge la dernière version du jeu publiée sur GitHub
     // (index.html, style.css, jeu.js), la garde en mémoire pour jouer hors connexion, puis l'affiche.
@@ -36,6 +36,11 @@
       const page = html.replace('href="style.css"', `href="${cssUrl}"`).replace('src="jeu.js"', `src="${jsUrl}"`);
       document.open(); document.write(page); document.close();
     }
+    // Message d'attente dans la langue choisie dans le jeu (ou celle du système).
+    let lang = '';
+    try { lang = localStorage.getItem('tennis-club-lang') || ''; } catch { /* rien */ }
+    if (!lang) lang = (navigator.language || 'fr').toLowerCase().startsWith('fr') ? 'fr' : 'en';
+    document.getElementById('msg').textContent = lang === 'fr' ? 'Recherche de mises à jour…' : 'Checking for updates…';
     (async () => {
       try {
         const files = await download();
