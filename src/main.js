@@ -40,12 +40,16 @@ const SAVE_KEY = 'tennis-club-sim-save-v1';
 
 // --- Rendu ---------------------------------------------------------------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
-// Qualité graphique : « haute » par défaut, « économie » pour les ordinateurs modestes.
-let quality = 'high';
-try { quality = localStorage.getItem('tennis-club-quality') || 'high'; } catch { /* stockage indisponible */ }
+// Qualité graphique : « ultra » (pleine définition, ombres fines), « haute » par défaut, « économie » pour les
+// ordinateurs modestes. Sans choix du joueur, le jeu passe seul en économie si l'image est trop saccadée.
+const QUALITIES = ['high', 'ultra', 'low'];
+let quality = 'high', qualityChosen = false;
+try { const q = localStorage.getItem('tennis-club-quality'); if (QUALITIES.includes(q)) { quality = q; qualityChosen = true; } } catch { /* stockage indisponible */ }
 function applyQuality() {
-  renderer.setPixelRatio(quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75);
-  renderer.shadowMap.enabled = quality === 'high';
+  renderer.setPixelRatio(quality === 'ultra' ? Math.min(devicePixelRatio, 2) : quality === 'high' ? Math.min(devicePixelRatio, 1.25) : 0.75);
+  renderer.shadowMap.enabled = quality !== 'low';
+  const sz = quality === 'ultra' ? 4096 : 2048;
+  if (env?.sun && env.sun.shadow.mapSize.x !== sz) { env.sun.shadow.mapSize.set(sz, sz); env.sun.shadow.map?.dispose(); env.sun.shadow.map = null; }
   scene?.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
   fit?.();
 }
@@ -517,13 +521,26 @@ $('btn-quit').addEventListener('click', () => { save(); location.reload(); });
 $('click-to-play').addEventListener('click', () => input.requestLock());
 $('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? 'Activer le son' : 'Couper le son'; });
 const qBtn = $('btn-quality');
-const qLabel = () => { qBtn.textContent = quality === 'high' ? 'Graphismes : haute qualité' : 'Graphismes : mode économie'; };
+const qLabel = () => { qBtn.textContent = { ultra: 'Graphismes : ultra', high: 'Graphismes : haute qualité', low: 'Graphismes : mode économie' }[quality]; };
 qLabel();
 qBtn.addEventListener('click', () => {
-  quality = quality === 'high' ? 'low' : 'high';
+  quality = QUALITIES[(QUALITIES.indexOf(quality) + 1) % QUALITIES.length];
+  qualityChosen = true;
   try { localStorage.setItem('tennis-club-quality', quality); } catch { /* rien */ }
   applyQuality(); qLabel();
 });
+// Mesure de fluidité pendant les premières secondes de jeu (si le joueur n'a rien choisi).
+const perf = { t: 0, frames: 0, done: false };
+function watchPerf(dt) {
+  if (perf.done || qualityChosen || mode !== 'play') return;
+  perf.t += dt; perf.frames++;
+  if (perf.t < 8) return;
+  perf.done = true;
+  if (perf.frames / perf.t < 28 && quality !== 'low') {
+    quality = 'low'; applyQuality(); qLabel();
+    hud.notify('Graphismes passés en mode économie pour plus de fluidité (modifiable dans le menu)', 'info');
+  }
+}
 
 // --- Boucle -----------------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
@@ -551,6 +568,7 @@ function tick() {
       birdT -= dt;
       if (birdT <= 0) { birdT = 5 + Math.random() * 12; if (club.s.minute < 20 * 60 && (player.pos.z < 0 || player.pos.z > 14)) audio.bird(); }
     }
+    watchPerf(dt);
     for (const p of club.persons) personViews.get(p.id)?.update(dt, p);
     courts.update(dt);
     stands.setBarrier(traffic.update(dt));
@@ -573,6 +591,7 @@ function tick() {
   const bar = $('loading-bar');
   await loadAssets(p => { if (bar) bar.style.width = `${Math.round(p * 100)}%`; });
   env = createEnvironment(scene, renderer);
+  applyQuality();
   building = createBuilding(scene, interactables);
   traffic = createTraffic(scene);
   renderer.setAnimationLoop(tick);

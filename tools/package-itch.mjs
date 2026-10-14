@@ -10,5 +10,6 @@ rmSync('dist/jeu-itch.zip', { force: true });
 mkdirSync(`${stage}/game`, { recursive: true });
 cpSync('desktop/loader.html', `${stage}/index.html`);
 for (const f of ['index.html', 'style.css', 'jeu.js']) cpSync(f, `${stage}/game/${f}`);
+cpSync('assets', `${stage}/game/assets`, { recursive: true });
 execSync('zip -qr -9 ../jeu-itch.zip .', { cwd: stage });
 console.log('Zip itch.io créé : dist/jeu-itch.zip');

@@ -1,6 +1,8 @@
 // Modèles 3D des produits de la boutique et des cartons de livraison.
 // Géométries et matériaux sont partagés : chaque article ne coûte qu'un objet léger.
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
+import { pbr } from './assets.js';
 import { PRODUCTS } from '../game/data.js';
 import { boxTexture, productLabel } from './textures.js';
 
@@ -431,9 +433,12 @@ export function productMesh(product) {
 export function boxMesh(product) {
   const [w, h, d] = BOX_SIZE[product];
   const tex = boxTexture(product);
-  const side = shared['boxMat-' + product] ??= new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85 });
-  const plain = shared.boxPlain ??= new THREE.MeshStandardMaterial({ color: 0xc9a26b, roughness: 0.85 });
-  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), [side, side, plain, plain, side, side]);
+  // Relief et rugosité du carton photographié (si disponible), étiquette dessinée par-dessus.
+  const relief = pbr('Cardboard002', { repeat: [1, 1] });
+  const side = shared['boxMat-' + product] ??= new THREE.MeshStandardMaterial({ map: tex, roughness: 0.85, normalMap: relief?.normalMap ?? null, normalScale: new THREE.Vector2(0.6, 0.6) });
+  const plain = shared.boxPlain ??= relief ? Object.assign(relief, { color: new THREE.Color(0xe0c9a8) }) : new THREE.MeshStandardMaterial({ color: 0xc9a26b, roughness: 0.85 });
+  const geo = shared['boxGeo-' + product] ??= new RoundedBoxGeometry(w, h, d, 2, 0.008);
+  const mesh = new THREE.Mesh(geo, [side, side, plain, plain, side, side]);
   mesh.castShadow = true; mesh.receiveShadow = true;
   // Ruban sur le dessus.
   const tape = new THREE.Mesh(new THREE.PlaneGeometry(0.07, d + 0.002), shared.tape ??= new THREE.MeshStandardMaterial({ color: 0xd8c39a, roughness: 0.4 }));

@@ -12,6 +12,8 @@ mkdirSync(`${stage}/bin`, { recursive: true });
 // Lanceur (mise à jour automatique depuis GitHub) + copie du jeu pour jouer sans connexion.
 cpSync('desktop/loader.html', `${stage}/app/index.html`);
 for (const f of ['index.html', 'style.css', 'jeu.js']) cpSync(f, `${stage}/app/game/${f}`);
+// Ressources graphiques (textures, ciels, modèles) : le jeu fonctionne aussi hors connexion.
+cpSync('assets', `${stage}/app/game/assets`, { recursive: true });
 cpSync('desktop/icon.png', `${stage}/app/icon.png`);
 cpSync('desktop/neutralino.config.json', `${stage}/neutralino.config.json`);
 
