@@ -47,14 +47,11 @@ Durée : environ 15 minutes. Tout ce dont tu as besoin est dans ce dossier.
      Ton jeu est en ligne ! Envoie le lien à tes amis.
 
 METTRE À JOUR LE JEU PLUS TARD
-   - Demande-moi le nouveau zip « jeu-web », puis sur itch.io : « Edit game » › Uploads ›
-     remplace l'ancien fichier par le nouveau (ou supprime-le et envoie le nouveau, en recochant
-     « This file will be played in the browser »). Le lien de ta page ne change pas.
+   - Rien à faire : le zip « jeu-itch » charge automatiquement la dernière version publiée sur
+     GitHub à chaque partie (comme l'application Windows).
    - Tu peux annoncer la nouveauté dans un « Devlog » (onglet sur ta page de jeu).
 
 BON À SAVOIR
    - Les sauvegardes des joueurs restent dans leur propre navigateur.
-   - La version itch.io ne se met pas à jour toute seule comme ton programme Windows : il faut
-     renvoyer le zip à chaque nouvelle version que tu veux publier.
    - Si un jour tu veux faire payer le jeu, itch.io te demandera un compte PayPal ou Stripe
      (si tu es mineur, demande à un parent).

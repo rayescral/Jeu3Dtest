@@ -8,6 +8,10 @@ Au départ, le club des Platanes a un seul court en terre battue, deux étagère
 
 **Double-clique sur `index.html`.** Le jeu s'ouvre dans le navigateur, sans serveur ni installation (comme Justice Deck). Il faut seulement les fichiers `index.html`, `style.css` et `jeu.js` dans le même dossier.
 
+## Version itch.io
+
+Le jeu est en ligne sur https://rayescral.itch.io/tennis-club-simulator. Le zip envoyé sur itch.io (`npm run itch`, résultat `dist/jeu-itch.zip`) contient le même lanceur que l'application Windows : à chaque partie, il charge la dernière version publiée sur GitHub. Il n'est donc plus nécessaire de renvoyer un zip sur itch.io après une modification.
+
 ## Version application (Windows)
 
 Le jeu existe aussi en vrai programme : un seul fichier `Tennis Club Simulator.exe` (environ 3 Mo), qui s'ouvre dans sa propre fenêtre en plein écran, sans navigateur. Il utilise le moteur web déjà présent dans Windows 10 et 11 (WebView2). Les sauvegardes restent sur l'ordinateur.

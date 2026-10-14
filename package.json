@@ -6,7 +6,8 @@
     "build": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --outfile=jeu.js",
     "start": "python3 -m http.server 8000",
     "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs",
-    "app": "npm run build && node tools/package-app.mjs"
+    "app": "npm run build && node tools/package-app.mjs",
+    "itch": "npm run build && node tools/package-itch.mjs"
   },
   "devDependencies": {
     "@neutralinojs/neu": "^11.7.2",
