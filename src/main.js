@@ -55,7 +55,15 @@ try { const q = localStorage.getItem('tennis-club-quality'); if (QUALITIES.inclu
 // Résolution dynamique : si l'image ralentit, le jeu baisse un peu sa définition interne (et la remonte quand
 // tout redevient fluide). Ainsi il s'adapte à chaque ordinateur sans que le joueur ait à régler quoi que ce soit.
 let resScale = 1;
-const baseRatio = () => (quality === 'ultra' ? Math.min(devicePixelRatio, 2) : quality === 'high' ? Math.min(devicePixelRatio, 1) : 0.75);
+const baseRatio = () => (quality === 'ultra' ? Math.min(devicePixelRatio, 2) : quality === 'high' ? Math.min(devicePixelRatio, 1.5) : Math.min(devicePixelRatio, 1));
+// Rendu logiciel (navigateur sans accélération graphique) : le jeu ne peut pas être fluide, on prévient le joueur.
+const softwareGL = (() => {
+  try {
+    const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(String(name));
+  } catch { return false; }
+})();
 function applyQuality() {
   renderer.setPixelRatio(baseRatio() * resScale);
   // Ombres : recalculées à chaque image en ultra, une image sur deux sinon (invisible à l'œil, deux fois moins de travail).
@@ -217,6 +225,11 @@ function startGame(state) {
   courts = createCourts(scene, club.s, interactables, pos => audio.ball(pos.distanceTo(camera.position)));
   for (const b of club.s.boxes) { b.held = false; addBoxView(b); }
   club.syncStaff();
+  if (softwareGL) {
+    applyPerfLevel(LEVELS_PERF.length - 1);
+    setTimeout(() => hud.notify(L('Ton navigateur n\'utilise pas la carte graphique : le jeu sera lent. Active « Utiliser l\'accélération graphique » dans ses paramètres, ou joue avec l\'application Windows.',
+      'Your browser is not using the graphics card: the game will be slow. Turn on "Use graphics acceleration" in its settings, or play the Windows app.'), 'bad'), 1500);
+  }
   rebuildColliders();
   building.setOpen(false);
   building.showCounter(club.counter);
@@ -546,44 +559,58 @@ qBtn.addEventListener('click', () => {
   quality = QUALITIES[(QUALITIES.indexOf(quality) + 1) % QUALITIES.length];
   qualityChosen = true;
   try { localStorage.setItem('tennis-club-quality', quality); } catch { /* rien */ }
-  applyQuality(); qLabel();
+  applyQuality(); fps.good = 0; applyPerfLevel(0); qLabel();
 });
-// Mesure de fluidité pendant les premières secondes de jeu (si le joueur n'a rien choisi).
-const perf = { t: 0, frames: 0, done: false };
-function watchPerf(dt) {
-  if (perf.done || qualityChosen || mode !== 'play') return;
-  perf.t += dt; perf.frames++;
-  if (perf.t < 8) return;
-  perf.done = true;
-  if (perf.frames / perf.t < 28 && quality !== 'low') {
-    quality = 'low'; applyQuality(); qLabel();
-    hud.notify(L('Graphismes passés en mode économie pour plus de fluidité (modifiable dans le menu)', 'Graphics switched to power saving for smoother play (change it in the menu)'), 'info');
-  }
-}
-
 // --- Boucle -----------------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
 let menuT = 0, birdT = 4, stepPhase = 0, lastW = 0, lastH = 0;
 
-const fps = { t: 0, n: 0, frame: 0 };
+// Adaptation automatique à l'ordinateur : si l'image ralentit (moins de 38 images/s), on allège par paliers
+// — ombres moins souvent recalculées, puis sans ombres, puis définition un peu réduite — et on revient en arrière
+// quand tout est fluide. En « ultra », rien n'est touché.
+const fps = { t: 0, n: 0, frame: 0, rate: 60, good: 0, level: 0 };
+const LEVELS_PERF = [
+  { shadowEvery: 2, shadows: true, scale: 1 },
+  { shadowEvery: 4, shadows: true, scale: 1 },
+  { shadowEvery: 4, shadows: false, scale: 1 },
+  { shadowEvery: 4, shadows: false, scale: 0.85 },
+  { shadowEvery: 4, shadows: false, scale: 0.72 },
+];
+function applyPerfLevel(l) {
+  fps.level = l;
+  const P = LEVELS_PERF[l];
+  const shadows = quality !== 'low' && P.shadows;
+  if (renderer.shadowMap.enabled !== shadows) { renderer.shadowMap.enabled = shadows; scene.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); }); }
+  if (resScale !== P.scale) { resScale = P.scale; renderer.setPixelRatio(baseRatio() * resScale); fit(); }
+}
 function adaptResolution(realDt) {
   fps.t += realDt; fps.n++;
   if (fps.t < 2) return;
-  const rate = fps.n / fps.t;
+  fps.rate = fps.n / fps.t;
   fps.t = 0; fps.n = 0;
-  if (quality === 'ultra' || document.hidden) return;
-  const min = quality === 'low' ? 0.6 : 0.55;
-  let next = resScale;
-  if (rate < 45 && resScale > min) next = Math.max(min, resScale * 0.85);
-  else if (rate > 57 && resScale < 1) next = Math.min(1, resScale * 1.1);
-  if (Math.abs(next - resScale) > 0.01) { resScale = next; renderer.setPixelRatio(baseRatio() * resScale); fit(); }
+  if (fpsBox) fpsBox.textContent = `${Math.round(fps.rate)} ${L('images/s', 'fps')} · ${L('palier', 'level')} ${fps.level}${softwareGL ? L(' · sans carte graphique', ' · no GPU') : ''}`;
+  if (quality === 'ultra' || document.hidden || mode !== 'play') return;
+  if (fps.rate < 38 && fps.level < LEVELS_PERF.length - 1) { fps.good = 0; applyPerfLevel(fps.level + 1); }
+  // Une fois les ombres coupées, on ne les rallume plus (chaque bascule fige l'image un instant).
+  else if (fps.rate > 56 && fps.level > (fps.level >= 2 ? 2 : 0) && ++fps.good >= 3) { fps.good = 0; applyPerfLevel(fps.level - 1); }
 }
+// Compteur d'images par seconde (touche F3).
+let fpsBox = null;
+addEventListener('keydown', e => {
+  if (e.code !== 'F3') return;
+  e.preventDefault();
+  if (fpsBox) { fpsBox.remove(); fpsBox = null; return; }
+  fpsBox = document.createElement('div');
+  fpsBox.style.cssText = 'position:fixed;top:8px;left:50%;transform:translateX(-50%);z-index:50;background:rgba(0,0,0,.6);color:#e4f05a;font:600 13px Outfit,Arial;padding:4px 10px;border-radius:8px;pointer-events:none';
+  fpsBox.textContent = '…';
+  document.body.appendChild(fpsBox);
+});
 
 function tick() {
   const realDt = clock.getDelta();
   const dt = Math.min(realDt, 0.05);
   adaptResolution(realDt);
-  if (!renderer.shadowMap.autoUpdate && fps.frame++ % 2 === 0) renderer.shadowMap.needsUpdate = true;
+  if (!renderer.shadowMap.autoUpdate && fps.frame++ % LEVELS_PERF[fps.level].shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
   setViewer(camera.position);
   // Si la fenêtre a changé de taille sans prévenir (passage en plein écran), on réajuste l'image.
   if (lastW !== innerWidth || lastH !== innerHeight) { lastW = innerWidth; lastH = innerHeight; fit(); }
@@ -605,7 +632,6 @@ function tick() {
       birdT -= dt;
       if (birdT <= 0) { birdT = 5 + Math.random() * 12; if (club.s.minute < 20 * 60 && (player.pos.z < 0 || player.pos.z > 14)) audio.bird(); }
     }
-    watchPerf(dt);
     for (const p of club.persons) personViews.get(p.id)?.update(dt, p);
     courts.update(dt);
     stands.setBarrier(traffic.update(dt));

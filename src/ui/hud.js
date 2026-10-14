@@ -106,8 +106,9 @@ export function createHud() {
       el.className = `toast ${kind}`;
       el.textContent = text;
       toasts.prepend(el);
-      setTimeout(() => el.classList.add('out'), 4200);
-      setTimeout(() => el.remove(), 4700);
+      const ms = Math.max(4200, text.length * 85);   // les longs messages restent plus longtemps
+      setTimeout(() => el.classList.add('out'), ms);
+      setTimeout(() => el.remove(), ms + 500);
       while (toasts.children.length > 5) toasts.lastChild.remove();
     },
 
