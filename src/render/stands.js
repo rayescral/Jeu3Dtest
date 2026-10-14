@@ -9,13 +9,14 @@ import { productMesh } from './products.js';
 import { pbr, modelAtHeight, breakTiling } from './assets.js';
 import { createPersonView } from './people.js';
 import { clamp, fmtMoney, fmtMoney0 } from '../core/util.js';
+import { L, EN } from '../core/i18n.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o });
 const H = 2.8;                    // hauteur des murs
 
 const THEME = {
-  buvette: { title: 'BUVETTE', stripe: ['#c0392b', '#fbfaf6'], wall: 0x6b4a2e, accent: 0xc0392b, items: ['beer', 'soda', 'coffee', 'juice'] },
-  snack: { title: 'SNACK', stripe: ['#f2c94c', '#1f6b4a'], wall: 0x2f6f5a, accent: 0xf2c94c, items: ['sandwich', 'panini', 'pizza', 'cookie'] },
+  buvette: { title: L('BUVETTE', 'BAR'), stripe: ['#c0392b', '#fbfaf6'], wall: 0x6b4a2e, accent: 0xc0392b, items: ['beer', 'soda', 'coffee', 'juice'] },
+  snack: { title: L('SNACK', 'SNACK BAR'), stripe: ['#f2c94c', '#1f6b4a'], wall: 0x2f6f5a, accent: 0xf2c94c, items: ['sandwich', 'panini', 'pizza', 'cookie'] },
 };
 
 function boxMesh(w, h, d, material, { cast = true, receive = true } = {}) {
@@ -121,11 +122,11 @@ export function createStands(scene, interactables, state) {
     const siteSign = board(512, 256, (g, w, h, p) => {
       g.fillStyle = '#ffd21a'; g.fillRect(0, 0, w, h);
       g.fillStyle = '#1b2420'; g.font = '800 40px Outfit, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-      g.fillText(`CHANTIER · ${F.name.toUpperCase()}`, w / 2, 52);
+      g.fillText(`${L('CHANTIER', 'BUILDING SITE')} · ${F.name.toUpperCase()}`, w / 2, 52);
       g.fillStyle = 'rgba(0,0,0,0.15)'; g.fillRect(40, 110, w - 80, 46);
       g.fillStyle = '#1f6b4a'; g.fillRect(40, 110, (w - 80) * (p ?? 0), 46);
       g.fillStyle = '#1b2420'; g.font = '700 36px Outfit, Arial';
-      g.fillText(`${Math.floor((p ?? 0) * 100)} %`, w / 2, 205);
+      g.fillText(`${Math.floor((p ?? 0) * 100)}${EN ? '' : ' '}%`, w / 2, 205);
     });
     const siteBoard = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.9), new THREE.MeshStandardMaterial({ map: siteSign.tex, roughness: 0.6 }));
     siteBoard.position.set(cx, 1.6, fz1 + 0.05);
@@ -225,7 +226,7 @@ export function createStands(scene, interactables, state) {
       g.fillStyle = '#20262a'; g.fillRect(0, 0, w, h);
       g.strokeStyle = '#8a6b45'; g.lineWidth = 14; g.strokeRect(7, 7, w - 14, h - 14);
       g.fillStyle = '#f4f1ea'; g.font = '700 40px Outfit, Arial'; g.textAlign = 'center';
-      g.fillText(key === 'buvette' ? 'À BOIRE' : 'À MANGER', w / 2, 62);
+      g.fillText(key === 'buvette' ? L('À BOIRE', 'DRINKS') : L('À MANGER', 'FOOD'), w / 2, 62);
       g.font = '500 32px Outfit, Arial';
       T.items.forEach((id, i) => {
         g.textAlign = 'left'; g.fillStyle = state.level >= PRODUCTS[id].level ? '#f4f1ea' : 'rgba(244,241,234,0.35)';
@@ -390,7 +391,7 @@ export function createStands(scene, interactables, state) {
     v.plot.visible = !f.built && !f.building;
     if (v.plot.visible) {
       const ok = state.level >= F.level;
-      v.plotSign.redraw([`EMPLACEMENT ${F.name.toUpperCase()}`, fmtMoney0(F.price), ok ? 'Ordinateur › Club' : `Niveau ${F.level} requis`]);
+      v.plotSign.redraw([`${L('EMPLACEMENT', 'PLOT FOR')} ${F.name.toUpperCase()}`, fmtMoney0(F.price), ok ? L('Ordinateur › Club', 'Computer › Club') : L(`Niveau ${F.level} requis`, `Level ${F.level} required`)]);
     }
     v.site.visible = !!f.building;
     v.scaffold.visible = !!f.building && p > 0.14 && p < 0.9;

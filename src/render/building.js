@@ -6,6 +6,7 @@ import { woodFloorTexture, wallTexture, cladTexture, canvasTexture } from './tex
 import { productMesh } from './products.js';
 import { pbr, modelAtHeight, breakTiling } from './assets.js';
 import { fmtMoney, fmtClock } from '../core/util.js';
+import { L } from '../core/i18n.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o });
 
@@ -147,7 +148,7 @@ export function createBuilding(scene, interactables) {
     g.strokeStyle = '#ffffff'; g.lineWidth = 5; g.beginPath(); g.arc(w / 2 - 52, h / 2 - 30, 38, -0.6, 0.6); g.stroke();
     g.beginPath(); g.arc(w / 2 + 52, h / 2 - 30, 38, Math.PI - 0.6, Math.PI + 0.6); g.stroke();
     g.fillStyle = '#ffffff'; g.font = '700 40px Outfit, Arial'; g.textAlign = 'center'; g.fillText('ClubOS', w / 2, h / 2 + 50);
-    g.font = '500 22px Outfit, Arial'; g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText('Appuie sur E', w / 2, h / 2 + 88);
+    g.font = '500 22px Outfit, Arial'; g.fillStyle = 'rgba(255,255,255,0.7)'; g.fillText(L('Appuie sur E', 'Press E'), w / 2, h / 2 + 88);
   });
   const lid = new THREE.Group();
   lid.position.set(0, 0.02, -0.15);
@@ -209,7 +210,7 @@ export function createBuilding(scene, interactables) {
     g.fillStyle = '#fbfaf6'; g.fillRect(0, 0, w, h);
     g.strokeStyle = open ? '#2e9c5d' : '#c0392b'; g.lineWidth = 18; g.strokeRect(9, 9, w - 18, h - 18);
     g.fillStyle = open ? '#2e9c5d' : '#c0392b'; g.font = '800 120px Outfit, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText(open ? 'OUVERT' : 'FERMÉ', w / 2, h / 2 + 6);
+    g.fillText(open ? L('OUVERT', 'OPEN') : L('FERMÉ', 'CLOSED'), w / 2, h / 2 + 6);
   });
   const signGroup = new THREE.Group();
   signGroup.position.set(SIGN.x, 1.7, SIGN.z - 0.08);
@@ -243,9 +244,9 @@ export function createBuilding(scene, interactables) {
   }
   // Affiches.
   const posters = [
-    ['TOURNOI D\'ÉTÉ', 'Simple & double · 12 au 20 juillet', '#d9673a'],
-    ['ÉCOLE DE TENNIS', 'Mini-tennis dès 5 ans', '#2f6fe0'],
-    ['DÉCOUVRE LE PADEL', 'Séance d\'initiation gratuite', '#1f6b4a'],
+    [L('TOURNOI D\'ÉTÉ', 'SUMMER TOURNAMENT'), L('Simple & double · 12 au 20 juillet', 'Singles & doubles · 12–20 July'), '#d9673a'],
+    [L('ÉCOLE DE TENNIS', 'TENNIS SCHOOL'), L('Mini-tennis dès 5 ans', 'Mini-tennis from age 5'), '#2f6fe0'],
+    [L('DÉCOUVRE LE PADEL', 'DISCOVER PADEL'), L('Séance d\'initiation gratuite', 'Free taster session'), '#1f6b4a'],
   ];
   posters.forEach(([title, sub, color], i) => {
     const tex = canvasTexture(400, 560, (g, w, h) => {
@@ -357,8 +358,8 @@ export function createBuilding(scene, interactables) {
       let v = counterViews.get(it.uid);
       if (!v) {
         if (it.kind === 'product') v = productMesh(it.product);
-        else if (it.kind === 'booking') v = ticket(`RÉSERVATION|${it.label.split(' ·')[0]}`, '#d9673a');
-        else v = ticket('LICENCE|Saison 2026', '#1f6b4a');
+        else if (it.kind === 'booking') v = ticket(`${L('RÉSERVATION', 'BOOKING')}|${it.label.split(' ·')[0]}`, '#d9673a');
+        else v = ticket(L('LICENCE|Saison 2026', 'MEMBERSHIP|2026 season'), '#1f6b4a');
         const g = new THREE.Group();
         g.add(v);
         // Boîte de sélection un peu plus grande que l'objet, pour viser facilement.
@@ -398,10 +399,10 @@ export function createBuilding(scene, interactables) {
   function drawRegister(g, w, h, counter = null) {
     g.fillStyle = '#0f1418'; g.fillRect(0, 0, w, h);
     g.fillStyle = '#1f6b4a'; g.fillRect(0, 0, w, 44);
-    g.fillStyle = '#ffffff'; g.font = '700 24px Outfit, Arial'; g.textAlign = 'left'; g.fillText('CAISSE', 16, 30);
+    g.fillStyle = '#ffffff'; g.font = '700 24px Outfit, Arial'; g.textAlign = 'left'; g.fillText(L('CAISSE', 'TILL'), 16, 30);
     if (!counter || !counter.cust) {
       g.fillStyle = 'rgba(255,255,255,0.5)'; g.font = '500 26px Outfit, Arial'; g.textAlign = 'center';
-      g.fillText('En attente d\'un client', w / 2, h / 2 + 10);
+      g.fillText(L('En attente d\'un client', 'Waiting for a customer'), w / 2, h / 2 + 10);
       return;
     }
     g.font = '500 22px Outfit, Arial';
@@ -415,10 +416,10 @@ export function createBuilding(scene, interactables) {
     g.textAlign = 'right'; g.fillText(fmtMoney(counter.total), w - 16, h - 80);
     if (counter.phase === 'pay') {
       g.font = '600 24px Outfit, Arial'; g.fillStyle = '#ffffff'; g.textAlign = 'left';
-      if (counter.method === 'card') g.fillText('Paiement par carte', 16, h - 34);
+      if (counter.method === 'card') g.fillText(L('Paiement par carte', 'Card payment'), 16, h - 34);
       else {
-        g.fillText(`Donné ${fmtMoney(counter.given)}`, 16, h - 34);
-        g.textAlign = 'right'; g.fillStyle = '#7ee39a'; g.fillText(`À rendre ${fmtMoney(counter.given - counter.total)}`, w - 16, h - 34);
+        g.fillText(`${L('Donné', 'Given')} ${fmtMoney(counter.given)}`, 16, h - 34);
+        g.textAlign = 'right'; g.fillStyle = '#7ee39a'; g.fillText(`${L('À rendre', 'Change')} ${fmtMoney(counter.given - counter.total)}`, w - 16, h - 34);
       }
     }
   }

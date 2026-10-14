@@ -10,7 +10,8 @@ import {
   DELIVERY, playSpots, padelEntry, TENNIS_AREA, QUEUE_APPROACH_X, COUNTER_EXIT,
   STANDS, PARKING_SPOTS, RESERVED_SPOTS, PARKING_LANE_Z, carDoor, SECURITY_POST, carRoute, routeDuration,
 } from './layout.js';
-import { clamp, rand, randInt, pick, round10, dist2 } from '../core/util.js';
+import { clamp, rand, randInt, pick, round10, dist2, fmtMoney } from '../core/util.js';
+import { L as T } from '../core/i18n.js';   // (L désigne aussi le meneur d'un groupe de clients)
 
 export const GAME_MIN_PER_SEC = 2;        // 1 seconde réelle = 2 minutes de jeu
 const WALK_SPEED = 1.45;
@@ -168,7 +169,7 @@ export class Club {
       ch.done = true;
       this.earn(ch.reward, 'bonus');
       this.addXp(30);
-      this.h.notify(`Défi réussi ! +${ch.reward} €`, 'good');
+      this.h.notify(T(`Défi réussi ! +${ch.reward} €`, `Challenge complete! +€${ch.reward}`), 'good');
       this.h.sound('level');
       this.h.challengeChanged();
     }
@@ -274,7 +275,7 @@ export class Club {
       const price = this.s.prices.parking;
       this.earn(price, 'parking');
       this.s.stats.cars++;
-      if (price > SERVICES.parking.market * 1.6) this.upset(cust, Math.min(0.4, (price / SERVICES.parking.market - 1.6) * 0.25 + 0.1), 'Le parking est hors de prix !');
+      if (price > SERVICES.parking.market * 1.6) this.upset(cust, Math.min(0.4, (price / SERVICES.parking.market - 1.6) * 0.25 + 0.1), T('Le parking est hors de prix !', 'Parking is way too expensive!'));
     }
     cust.state = 'arrive';
     this.routeArrival(cust);
@@ -403,8 +404,8 @@ export class Club {
         if (cust.timer <= 0) {
           cust.timer = 1;
           if (this.reserveCourt(cust)) this.joinQueue(cust);
-          else if (cust.waitT > COURT_PATIENCE || !this.s.open) { this.upset(cust, 0.45, 'Aucun terrain libre…'); this.leave(cust); }
-          else if (cust.waitT > 18 && Math.random() < 0.05 && this.anyOvertime()) this.say(L, 'Ils ont fini, ceux-là ?!');
+          else if (cust.waitT > COURT_PATIENCE || !this.s.open) { this.upset(cust, 0.45, T('Aucun terrain libre…', 'No free court…')); this.leave(cust); }
+          else if (cust.waitT > 18 && Math.random() < 0.05 && this.anyOvertime()) this.say(L, T('Ils ont fini, ceux-là ?!', 'Are they done yet?!'));
         }
         break;
       case 'queue': {
@@ -412,7 +413,7 @@ export class Club {
         const idx = this.queue.indexOf(cust);
         if (idx === 0 && this.arrived(L) && !this.counter.cust) this.beginCheckout(cust);
         else if (cust.queueT > QUEUE_PATIENCE * (0.8 + this.s.satisfaction * 0.5)) {
-          this.upset(cust, 0.55, 'Trop d\'attente !');
+          this.upset(cust, 0.55, T('Trop d\'attente !', 'This is taking forever!'));
           this.leaveQueue(cust);
           this.leave(cust);
         }
@@ -422,7 +423,7 @@ export class Club {
         cust.queueT += dt;
         // Si personne ne s'occupe de lui pendant longtemps, il finit par partir.
         if (this.counter.idleT > 45) {
-          this.upset(cust, 0.5, 'Il n\'y a personne à l\'accueil ?');
+          this.upset(cust, 0.5, T('Il n\'y a personne à l\'accueil ?', 'Is nobody at reception?'));
           this.cancelCheckout();
           this.leave(cust);
         }
@@ -437,15 +438,15 @@ export class Club {
       case 'overtime':
         cust.overT += dt;
         cust.refuseT = Math.max(0, (cust.refuseT ?? 0) - dt);
-        if (cust.overT > OVERTIME_MAX) { this.say(L, 'Bon, on y va…', 'info'); this.finishSession(cust); }
-        else if (Math.random() < dt / 14) this.say(pick(cust.persons), pick(['Encore un jeu !', 'Dernier point !', 'On finit le set !', 'Balle de match !']), 'info');
+        if (cust.overT > OVERTIME_MAX) { this.say(L, T('Bon, on y va…', 'Right, we\'re off…'), 'info'); this.finishSession(cust); }
+        else if (Math.random() < dt / 14) this.say(pick(cust.persons), pick([T('Encore un jeu !', 'One more game!'), T('Dernier point !', 'Last point!'), T('On finit le set !', 'We\'re finishing the set!'), T('Balle de match !', 'Match point!')]), 'info');
         break;
       case 'standQueue': {
         cust.queueT += dt;
         const q = this.stand[cust.stand].queue;
         if (q[0] === cust && this.arrived(L)) this.beginStandOrder(cust);
         else if (cust.queueT > STAND_PATIENCE * 1.6 * (0.8 + this.s.satisfaction * 0.5)) {
-          this.upset(cust, 0.45, 'Ça n\'avance pas…');
+          this.upset(cust, 0.45, T('Ça n\'avance pas…', 'This line isn\'t moving…'));
           this.leaveStand(cust);
           this.leave(cust);
         }
@@ -454,7 +455,7 @@ export class Club {
       case 'standOrder':
         cust.orderT += dt;
         if (cust.orderT > STAND_PATIENCE * (0.8 + this.s.satisfaction * 0.5)) {
-          this.upset(cust, 0.5, 'Il n\'y a personne pour servir ?');
+          this.upset(cust, 0.5, T('Il n\'y a personne pour servir ?', 'Is nobody serving?'));
           this.leaveStand(cust);
           this.leave(cust);
         }
@@ -475,7 +476,7 @@ export class Club {
     while (cust.wants.length) {
       const want = cust.wants.shift();
       const shelf = this.findShelfWith(want, L);
-      if (!shelf) { this.upset(cust, 0.15, `Plus de ${PRODUCTS[want].short.toLowerCase()} !`); continue; }
+      if (!shelf) { this.upset(cust, 0.15, T(`Plus de ${PRODUCTS[want].short.toLowerCase()} !`, `Out of ${PRODUCTS[want].short.toLowerCase()}!`)); continue; }
       cust.want = want; cust.shelf = shelf.index;
       const slot = SHELF_SLOTS[shelf.index];
       this.goTo(L, [{ x: slot.browse.x + rand(-0.5, 0.5), z: slot.browse.z + rand(-0.15, 0.15) }]);
@@ -506,9 +507,9 @@ export class Club {
     const P = PRODUCTS[cust.want];
     const price = this.s.prices[cust.want];
     if (lvlIdx < 0) {
-      this.upset(cust, 0.15, `Plus de ${P.short.toLowerCase()} !`);
+      this.upset(cust, 0.15, T(`Plus de ${P.short.toLowerCase()} !`, `Out of ${P.short.toLowerCase()}!`));
     } else if (this.priceRefused(cust.want, price)) {
-      this.upset(cust, 0.12, 'Trop cher !');
+      this.upset(cust, 0.12, T('Trop cher !', 'Too expensive!'));
     } else {
       const lvl = sh.levels[lvlIdx];
       const n = Math.min(lvl.qty, P.cost > 20 ? 1 : (Math.random() < 0.7 ? 1 : 2));
@@ -548,7 +549,7 @@ export class Club {
     if (this.reserveCourt(cust)) return this.joinQueue(cust);
     cust.state = 'waitCourt'; cust.timer = 1; cust.waitT = 0;
     this.goTo(cust.leader, [this.takeLobby(cust.leader)]);
-    if (Math.random() < 0.6) this.say(cust.leader, 'On attend qu\'un terrain se libère', 'info');
+    if (Math.random() < 0.6) this.say(cust.leader, T('On attend qu\'un terrain se libère', 'We\'re waiting for a court'), 'info');
   }
   releaseCourt(cust) {
     if (cust.court && this.court[cust.court].reservedBy === cust.id) {
@@ -592,7 +593,7 @@ export class Club {
     cust.timer = rand(32, 44);
     const st = this.s.courts[cust.court];
     this.court[cust.court].playing = true;
-    if (st.wear > 0.5) this.upset(cust, 0.25, st.wear > 0.75 ? 'Le terrain est dans un état…' : 'Terrain mal entretenu');
+    if (st.wear > 0.5) this.upset(cust, 0.25, st.wear > 0.75 ? T('Le terrain est dans un état…', 'Look at the state of this court…') : T('Terrain mal entretenu', 'Poorly kept court'));
     const spots = playSpots(cust.court, cust.sport);
     cust.persons.forEach((p, i) => { p.action = 'play'; p.rot = spots[i].side > 0 ? Math.PI : 0; });
     this.s.stats.sessions++;
@@ -605,8 +606,8 @@ export class Club {
       cust.state = 'overtime'; cust.overT = 0;
       this.court[cust.court].overtime = true;
       const label = COURTS.find(c => c.id === cust.court).label;
-      this.h.notify(`${label} : les joueurs dépassent leur créneau ! Va les faire sortir (E) ou embauche un agent de sécurité.`, 'bad');
-      this.say(cust.leader, 'On finit le set !', 'info');
+      this.h.notify(T(`${label} : les joueurs dépassent leur créneau ! Va les faire sortir (E) ou embauche un agent de sécurité.`, `${label}: the players are overrunning their slot! Send them off (E) or hire a security guard.`), 'bad');
+      this.say(cust.leader, T('On finit le set !', 'We\'re finishing the set!'), 'info');
       this.h.courtChanged(cust.court);
       return;
     }
@@ -645,11 +646,11 @@ export class Club {
       if (cust.refuseT > 0) return 'wait';
       if (Math.random() < 0.3) {
         cust.refuseT = 2.5;
-        this.say(cust.leader, pick(['Encore 5 minutes !', 'Juste ce jeu-là !', 'On a presque fini !']), 'bad');
+        this.say(cust.leader, pick([T('Encore 5 minutes !', 'Five more minutes!'), T('Juste ce jeu-là !', 'Just this game!'), T('On a presque fini !', 'We\'re nearly done!')]), 'bad');
         return 'refused';
       }
     }
-    this.say(cust.leader, by === 'guard' ? 'D\'accord, d\'accord…' : 'Pardon, on y va !', 'info');
+    this.say(cust.leader, by === 'guard' ? T('D\'accord, d\'accord…', 'Okay, okay…') : T('Pardon, on y va !', 'Sorry, we\'re leaving!'), 'info');
     cust.mood = clamp(cust.mood - 0.05, 0, 1);
     this.count('evictions');
     this.addXp(5);
@@ -660,7 +661,7 @@ export class Club {
   // --- file et caisse
   joinQueue(cust) {
     if (this.queue.length >= QUEUE.length) {
-      this.upset(cust, 0.4, 'Il y a trop de monde !');
+      this.upset(cust, 0.4, T('Il y a trop de monde !', 'It\'s way too crowded!'));
       return this.leave(cust);
     }
     this.queue.push(cust);
@@ -685,7 +686,7 @@ export class Club {
     cust.leader.rot = Math.PI;
     const c = this.counter;
     c.cust = cust; c.phase = 'scan'; c.idleT = 0; c.autoT = 0;
-    if (cust.kind === 'licence') cust.basket.push({ kind: 'licence', price: this.s.prices.licence, label: 'Licence annuelle' });
+    if (cust.kind === 'licence') cust.basket.push({ kind: 'licence', price: this.s.prices.licence, label: SERVICES.licence.name });
     c.items = cust.basket.map((it, i) => ({ ...it, uid: this.id(), scanned: false, index: i }));
     c.total = 0; c.method = null; c.given = 0;
     this.h.counterChanged(c);
@@ -732,7 +733,7 @@ export class Club {
     const c = this.counter;
     if (c.phase !== 'pay' || c.method !== 'cash') return null;
     const due = Math.round((c.given - c.total) * 100), gave = Math.round(change * 100);
-    if (gave < due) this.upset(c.cust, 0.35, 'Vous ne m\'avez pas rendu assez !');
+    if (gave < due) this.upset(c.cust, 0.35, T('Vous ne m\'avez pas rendu assez !', 'You didn\'t give me enough change!'));
     this.completeCheckout(c.given - change, gave === due);
     return gave === due ? 'ok' : gave < due ? 'short' : 'over';
   }
@@ -759,8 +760,8 @@ export class Club {
     if (cust.vip && cust.queueT < 35) {
       const tip = round10(c.total * 0.12 + 2);
       this.earn(tip, 'tips');
-      this.say(cust.leader, `Gardez la monnaie ! (+${tip.toFixed(2).replace('.', ',')} €)`, 'good');
-    } else if (cust.mood > 0.85 && Math.random() < 0.4) this.say(cust.leader, 'Merci, bonne journée !', 'good');
+      this.say(cust.leader, T(`Gardez la monnaie ! (+${tip.toFixed(2).replace('.', ',')} €)`, `Keep the change! (+${fmtMoney(tip)})`), 'good');
+    } else if (cust.mood > 0.85 && Math.random() < 0.4) this.say(cust.leader, T('Merci, bonne journée !', 'Thanks, have a nice day!'), 'good');
     this.queue.shift();
     this.queue.forEach((q, k) => this.goTo(q.leader, [QUEUE[k]]));
     c.cust = null; c.items = []; c.phase = 'idle'; c.total = 0; c.method = null; c.given = 0;
@@ -799,7 +800,7 @@ export class Club {
     cust.stand = key;
     if (!this.built(key)) return this.leave(cust);
     if (st.queue.length >= S.queue.length) {
-      this.upset(cust, 0.35, 'Trop de monde à la ' + (key === 'buvette' ? 'buvette' : 'caisse du snack') + ' !');
+      this.upset(cust, 0.35, (key === 'buvette' ? T('Trop de monde à la buvette !', 'The bar is packed!') : T('Trop de monde à la caisse du snack !', 'The snack bar queue is huge!')));
       return this.leave(cust);
     }
     st.queue.push(cust);
@@ -841,7 +842,7 @@ export class Club {
     cust.order = Object.entries(order).map(([product, qty]) => ({ product, qty }));
     if (!cust.order.length) { this.leaveStand(cust); return this.leave(cust); }
     const text = cust.order.map(o => `${o.qty} ${PRODUCTS[o.product].short.toLowerCase()}${o.qty > 1 && !/s$/.test(PRODUCTS[o.product].short) ? 's' : ''}`).join(' + ');
-    this.say(cust.leader, `${text}, svp !`, 'info');
+    this.say(cust.leader, T(`${text}, svp !`, `${text}, please!`), 'info');
     this.h.standChanged(key);
   }
   standOrder(key) {
@@ -880,22 +881,22 @@ export class Club {
     }
     const zone = key === 'buvette' ? 'bar' : 'snack';
     if (items === 0) {
-      this.upset(cust, 0.35, tooExpensive ? 'C\'est bien trop cher !' : `Plus de ${PRODUCTS[missing ?? cust.order[0].product].short.toLowerCase()} ?!`);
+      this.upset(cust, 0.35, tooExpensive ? T('C\'est bien trop cher !', 'That\'s far too expensive!') : T(`Plus de ${PRODUCTS[missing ?? cust.order[0].product].short.toLowerCase()} ?!`, `No more ${PRODUCTS[missing ?? cust.order[0].product].short.toLowerCase()}?!`));
       this.leaveStand(cust);
       this.leave(cust);
       this.h.sound('error');
       return 'empty';
     }
-    if (missing) this.upset(cust, 0.15, `Il n'y a plus de ${PRODUCTS[missing].short.toLowerCase()}…`);
-    else if (tooExpensive) this.upset(cust, 0.1, 'Trop cher, je ne prends pas tout');
+    if (missing) this.upset(cust, 0.15, T(`Il n'y a plus de ${PRODUCTS[missing].short.toLowerCase()}…`, `There's no ${PRODUCTS[missing].short.toLowerCase()} left…`));
+    else if (tooExpensive) this.upset(cust, 0.1, T('Trop cher, je ne prends pas tout', 'Too expensive, I won\'t take everything'));
     this.earn(round10(total), ZONE_STAT[zone]);
     this.count(zone === 'bar' ? 'barItems' : 'snackItems', items);
     this.addXp(2 * items);
     // Pourboire : clients VIP, ou servis très vite.
     if (cust.vip || cust.orderT < 6) {
       const tip = cust.vip ? round10(total * 0.2 + 1) : 0.5;
-      if (cust.vip || Math.random() < 0.35) { this.earn(tip, 'tips'); this.say(cust.leader, `Merci ! (+${tip.toFixed(2).replace('.', ',')} € de pourboire)`, 'good'); }
-    } else if (!missing && Math.random() < 0.3) this.say(cust.leader, key === 'buvette' ? 'Santé !' : 'Ça a l\'air bon !', 'good');
+      if (cust.vip || Math.random() < 0.35) { this.earn(tip, 'tips'); this.say(cust.leader, T(`Merci ! (+${tip.toFixed(2).replace('.', ',')} € de pourboire)`, `Thanks! (+${fmtMoney(tip)} tip)`), 'good'); }
+    } else if (!missing && Math.random() < 0.3) this.say(cust.leader, key === 'buvette' ? T('Santé !', 'Cheers!') : T('Ça a l\'air bon !', 'Looks good!'), 'good');
     cust.mood = clamp(cust.mood - clamp((cust.queueT + cust.orderT - 30) / 90, 0, 0.3), 0, 1);
     this.h.sound('cash');
     this.h.standServed(key, cust.order);
@@ -949,7 +950,7 @@ export class Club {
       this.s.boxes.push(box);
       this.h.boxAdded(box);
     }
-    this.h.notify(`Livraison arrivée : ${o.boxes} carton${o.boxes > 1 ? 's' : ''} de ${PRODUCTS[o.product].short.toLowerCase()}`, 'info');
+    this.h.notify(T(`Livraison arrivée : ${o.boxes} carton${o.boxes > 1 ? 's' : ''} de ${PRODUCTS[o.product].short.toLowerCase()}`, `Delivery arrived: ${o.boxes} box${o.boxes > 1 ? 'es' : ''} of ${PRODUCTS[o.product].short.toLowerCase()}`), 'info');
   }
   freePalletSlot() {
     const used = new Set(this.s.boxes.filter(b => b.pallet != null).map(b => b.pallet));
@@ -1008,7 +1009,7 @@ export class Club {
     st.built = true; st.wear = 0;
     this.addXp(40);
     this.h.courtChanged(id, true);
-    this.h.notify(`${c.label} construit !`, 'good');
+    this.h.notify(T(`${c.label} construit !`, `${c.label} built!`), 'good');
     return true;
   }
   buyShelf() {
@@ -1033,7 +1034,7 @@ export class Club {
     if (!this.spend(F.price, 'build')) return false;
     f.building = true; f.progress = 0;
     this.h.facilityChanged(key, false);
-    this.h.notify(`Chantier lancé : ${F.name}. Les ouvriers sont au travail !`, 'good');
+    this.h.notify(T(`Chantier lancé : ${F.name}. Les ouvriers sont au travail !`, `Construction started: ${F.name}. The builders are at work!`), 'good');
     return true;
   }
   updateBuilds(dt) {
@@ -1046,8 +1047,8 @@ export class Club {
         this.addXp(30);
         this.syncStaff();
         this.h.facilityChanged(key, true);
-        const tips = { buvette: 'Commande des boissons sur l\'ordinateur et range-les dans le frigo de la buvette.', snack: 'Commande des sandwichs sur l\'ordinateur et range-les dans la vitrine du snack.', parking: 'Le prix du ticket se règle dans l\'onglet Prix.' };
-        this.h.notify(`${FACILITIES[key].name} terminé ! ${tips[key] ?? ''}`, 'good');
+        const tips = { buvette: T('Commande des boissons sur l\'ordinateur et range-les dans le frigo de la buvette.', 'Order drinks on the computer and stock them in the bar fridge.'), snack: T('Commande des sandwichs sur l\'ordinateur et range-les dans la vitrine du snack.', 'Order sandwiches on the computer and stock them in the snack bar display.'), parking: T('Le prix du ticket se règle dans l\'onglet Prix.', 'Set the ticket price in the Prices tab.') };
+        this.h.notify(T(`${FACILITIES[key].name} terminé ! ${tips[key] ?? ''}`, `${FACILITIES[key].name} finished! ${tips[key] ?? ''}`), 'good');
       } else this.h.facilityProgress(key, f.progress);
     }
   }
@@ -1177,10 +1178,10 @@ export class Club {
       const cust = this.customers.find(c => c.state === 'overtime' && c.overT > 3);
       if (!cust) return;
       job.court = cust.court; job.state = 'go';
-      this.say(g, 'J\'y vais !', 'info');
+      this.say(g, T('J\'y vais !', 'On my way!'), 'info');
       this.goTo(g, [FRONT_OUT, FRONT_IN, BACK_IN, BACK_OUT, ...COURT_SLOTS[cust.court].route]);
     } else if (job.state === 'go' && this.arrived(g)) {
-      if (this.court[job.court].overtime) { this.say(g, 'Le créneau est terminé, merci !', 'info'); this.h.sound('whistle'); }
+      if (this.court[job.court].overtime) { this.say(g, T('Le créneau est terminé, merci !', 'Your slot is over, thank you!'), 'info'); this.h.sound('whistle'); }
       job.state = 'talk'; job.timer = 1.6;
     } else if (job.state === 'talk') {
       job.timer -= dt;
@@ -1197,7 +1198,7 @@ export class Club {
   // ---------------------------------------------------------------------------------- journée
   toggleOpen() {
     if (this.dayOver) return this.s.open;
-    if (!this.s.open && this.s.minute >= this.closeMinute - 30) { this.h.notify('Trop tard pour ouvrir aujourd\'hui', 'bad'); return false; }
+    if (!this.s.open && this.s.minute >= this.closeMinute - 30) { this.h.notify(T('Trop tard pour ouvrir aujourd\'hui', 'Too late to open today'), 'bad'); return false; }
     this.s.open = !this.s.open;
     // La journée (et l'horloge) démarre la première fois qu'on ouvre le club.
     if (this.s.open && !this.s.dayStarted) { this.s.dayStarted = true; this.h.dayStarted?.(); }
@@ -1250,7 +1251,7 @@ export class Club {
       if (s.minute >= this.closeMinute) {
         s.open = false;
         this.h.openChanged(false);
-        this.h.notify('Fermeture : plus de nouveaux clients aujourd\'hui', 'info');
+        this.h.notify(T('Fermeture : plus de nouveaux clients aujourd\'hui', 'Closing time: no new customers today'), 'info');
       } else if (this.customers.length < MAX_CUSTOMERS && Math.random() < (this.arrivalRate() / 60) * GAME_MIN_PER_SEC * dt) {
         this.spawnCustomer(this.pickKind());
       }
@@ -1284,10 +1285,10 @@ export class Club {
       this.earn(300, 'bonus');
       this.s.satisfaction = clamp(this.s.satisfaction + 0.05, 0, 1);
       this.addXp(40);
-      this.h.notify('Visite de la ligue : terrains impeccables ! Prime de 300 €', 'good');
+      this.h.notify(T('Visite de la ligue : terrains impeccables ! Prime de 300 €', 'League inspection: spotless courts! €300 bonus'), 'good');
     } else {
       this.s.satisfaction = clamp(this.s.satisfaction - 0.04, 0, 1);
-      this.h.notify('Visite de la ligue : l\'inspecteur trouve les terrains mal entretenus…', 'bad');
+      this.h.notify(T('Visite de la ligue : l\'inspecteur trouve les terrains mal entretenus…', 'League inspection: the inspector finds the courts poorly kept…'), 'bad');
     }
   }
 

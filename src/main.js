@@ -23,8 +23,15 @@ import { createHud } from './ui/hud.js';
 import { createComputer } from './ui/computer.js';
 import { createPayment } from './ui/payment.js';
 import { fmtMoney, fmtMoney0, clamp, lerp } from './core/util.js';
+import { L, EN, LANG, setLang } from './core/i18n.js';
 
 const $ = id => document.getElementById(id);
+// Textes fixes de la page en anglais (attributs data-en de index.html).
+if (EN) {
+  document.documentElement.lang = 'en';
+  document.querySelectorAll('[data-en]').forEach(el => { el.innerHTML = el.dataset.en; });
+  document.querySelectorAll('[data-en-title]').forEach(el => { el.title = el.dataset.enTitle; });
+}
 
 // En cas d'erreur inattendue, on l'affiche plutôt que de laisser un écran figé.
 function showError(msg) {
@@ -154,7 +161,7 @@ const hooks = {
   },
   bubble(p, text, kind) { personViews.get(p.id)?.say(text, kind); },
   shelfChanged(i) { shelves?.refresh(i); },
-  shelfBuilt(i, quiet) { shelves?.refresh(i); rebuildColliders(); if (!quiet) hud.notify('Nouvelle étagère installée', 'good'); },
+  shelfBuilt(i, quiet) { shelves?.refresh(i); rebuildColliders(); if (!quiet) hud.notify(L('Nouvelle étagère installée', 'New shelf installed'), 'good'); },
   counterChanged(c) { building.showCounter(c); hud.checkout(c); },
   boxAdded(box) { addBoxView(box); },
   boxRemoved(box) { removeBoxView(box); },
@@ -194,7 +201,7 @@ const hooks = {
   dayEnded(summary) { showSummary(summary); },
   openChanged(open) { building.setOpen(open); },
   pricesChanged() { shelves?.invalidate(); stands?.refreshMenus(); },
-  upgradeBought(k) { hud.notify('Aménagement installé', 'good'); },
+  upgradeBought(k) { hud.notify(L('Aménagement installé', 'Upgrade installed'), 'good'); },
 };
 
 function startGame(state) {
@@ -222,7 +229,7 @@ function startGame(state) {
   $('hud').hidden = false;
   audio.init();
   input.requestLock();
-  hud.notify(`Jour ${club.s.day} : le club ouvre à 8 h. Retourne la pancarte quand tu es prêt.`, 'info');
+  hud.notify(L(`Jour ${club.s.day} : le club ouvre à 8 h. Retourne la pancarte quand tu es prêt.`, `Day ${club.s.day}: the club opens at 8 am. Flip the sign when you're ready.`), 'info');
   announceDay();
 }
 
@@ -232,8 +239,8 @@ function announceDay() {
   const ev = club.s.event;
   if (ev && ev.id !== 'calm') {
     const E = EVENTS[ev.id];
-    const extra = ev.id === 'promo' && ev.product ? ` Aujourd'hui : ${PRODUCTS[ev.product].name}.` : '';
-    setTimeout(() => hud.notify(`${E.name} : ${E.desc}${extra}`, 'info'), 900);
+    const extra = ev.id === 'promo' && ev.product ? L(` Aujourd'hui : ${PRODUCTS[ev.product].name}.`, ` Today: ${PRODUCTS[ev.product].name}.`) : '';
+    setTimeout(() => hud.notify(L(`${E.name} : ${E.desc}${extra}`, `${E.name}: ${E.desc}${extra}`), 'info'), 900);
   }
 }
 
@@ -269,7 +276,7 @@ function resume() {
 
 function showLevelUp(level, unlocks) {
   const el = $('levelup');
-  el.innerHTML = `<div><span>Niveau ${level}</span><b>Le club grandit !</b>${unlocks.length ? `<p>Débloqué : ${unlocks.join(' · ')}</p>` : ''}</div>`;
+  el.innerHTML = `<div><span>${L('Niveau', 'Level')} ${level}</span><b>${L('Le club grandit !', 'The club is growing!')}</b>${unlocks.length ? `<p>${L('Débloqué :', 'Unlocked:')} ${unlocks.join(' · ')}</p>` : ''}</div>`;
   el.hidden = false;
   el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
   clearTimeout(showLevelUp.t);
@@ -288,28 +295,28 @@ function showSummary(s) {
   const ev = EVENTS[s.event] ?? EVENTS.calm;
   const drift = s.licenceDrift;
   $('summary').innerHTML = `<div class="sheet">
-    <p class="kicker">Fin de journée</p><h2>Bilan du jour ${s.day}</h2>
+    <p class="kicker">${L('Fin de journée', 'End of day')}</p><h2>${L(`Bilan du jour ${s.day}`, `Day ${s.day} report`)}</h2>
     <div class="sum-grid">
-      <section><h3>Recettes</h3>
-        <dl><dt>Locations de terrains</dt><dd>${fmtMoney(s.courts)}</dd><dt>Boutique</dt><dd>${fmtMoney(s.shop)}</dd><dt>Licences</dt><dd>${fmtMoney(s.licenceFees)}</dd>
-          ${line('Buvette', s.bar)}${line('Snack', s.snack)}${line('Parking', s.parking)}${line('Pourboires', s.tips)}${line('Primes et défis', s.bonus)}</dl>
+      <section><h3>${L('Recettes', 'Income')}</h3>
+        <dl><dt>${L('Locations de terrains', 'Court rentals')}</dt><dd>${fmtMoney(s.courts)}</dd><dt>${L('Boutique', 'Shop')}</dt><dd>${fmtMoney(s.shop)}</dd><dt>${L('Licences', 'Memberships')}</dt><dd>${fmtMoney(s.licenceFees)}</dd>
+          ${line(L('Buvette', 'Bar'), s.bar)}${line(L('Snack', 'Snack bar'), s.snack)}${line(L('Parking', 'Parking'), s.parking)}${line(L('Pourboires', 'Tips'), s.tips)}${line(L('Primes et défis', 'Bonuses and challenges'), s.bonus)}</dl>
         <p class="total">${fmtMoney(income)}</p></section>
-      <section><h3>Dépenses</h3>
-        <dl><dt>Commandes</dt><dd>${fmtMoney(s.orders)}</dd><dt>Travaux</dt><dd>${fmtMoney(s.build)}</dd><dt>Salaires</dt><dd>${fmtMoney(s.salaries)}</dd><dt>Entretien et charges</dt><dd>${fmtMoney(s.upkeep)}</dd></dl>
+      <section><h3>${L('Dépenses', 'Expenses')}</h3>
+        <dl><dt>${L('Commandes', 'Orders')}</dt><dd>${fmtMoney(s.orders)}</dd><dt>${L('Travaux', 'Construction')}</dt><dd>${fmtMoney(s.build)}</dd><dt>${L('Salaires', 'Wages')}</dt><dd>${fmtMoney(s.salaries)}</dd><dt>${L('Entretien et charges', 'Upkeep and bills')}</dt><dd>${fmtMoney(s.upkeep)}</dd></dl>
         <p class="total neg">−${fmtMoney(expenses)}</p></section>
     </div>
     <div class="sum-kpis">
-      <div><span>Résultat</span><b class="${income - expenses >= 0 ? 'pos' : 'neg'}">${income - expenses >= 0 ? '+' : ''}${fmtMoney(income - expenses)}</b></div>
-      <div><span>Clients</span><b>${s.customers}</b><small>${s.happy} satisfaits · ${s.angry} mécontents</small></div>
-      <div><span>Licenciés</span><b>${s.licences}</b><small>${s.newLicences} nouvelles licences${drift ? ` · ${drift > 0 ? '+' : ''}${drift} bouche-à-oreille` : ''}</small></div>
-      <div><span>Satisfaction</span><b>${(s.satisfaction * 5).toFixed(1)} / 5</b></div>
+      <div><span>${L('Résultat', 'Result')}</span><b class="${income - expenses >= 0 ? 'pos' : 'neg'}">${income - expenses >= 0 ? '+' : ''}${fmtMoney(income - expenses)}</b></div>
+      <div><span>${L('Clients', 'Customers')}</span><b>${s.customers}</b><small>${L(`${s.happy} satisfaits · ${s.angry} mécontents`, `${s.happy} happy · ${s.angry} unhappy`)}</small></div>
+      <div><span>${L('Licenciés', 'Members')}</span><b>${s.licences}</b><small>${L(`${s.newLicences} nouvelles licences`, `${s.newLicences} new members`)}${drift ? ` · ${drift > 0 ? '+' : ''}${drift} ${L('bouche-à-oreille', 'word of mouth')}` : ''}</small></div>
+      <div><span>${L('Satisfaction', 'Satisfaction')}</span><b>${(s.satisfaction * 5).toFixed(1)} / 5</b></div>
     </div>
-    <p class="sum-extra">${ev.name}${s.challenge ? ` · Défi « ${s.challenge.text} » : ${s.challenge.done ? '<b class="pos">réussi</b>' : '<b class="neg">raté</b>'}` : ''}${s.evictions ? ` · ${s.evictions} groupe${s.evictions > 1 ? 's' : ''} sorti${s.evictions > 1 ? 's' : ''} du terrain` : ''}</p>
-    <button class="primary" id="btn-next-day">Jour suivant</button>
+    <p class="sum-extra">${ev.name}${s.challenge ? ` · ${L(`Défi « ${s.challenge.text} » :`, `Challenge "${s.challenge.text}":`)} ${s.challenge.done ? `<b class="pos">${L('réussi', 'done')}</b>` : `<b class="neg">${L('raté', 'failed')}</b>`}` : ''}${s.evictions ? ` · ${L(`${s.evictions} groupe${s.evictions > 1 ? 's' : ''} sorti${s.evictions > 1 ? 's' : ''} du terrain`, `${s.evictions} group${s.evictions > 1 ? 's' : ''} sent off court`)}` : ''}</p>
+    <button class="primary" id="btn-next-day">${L('Jour suivant', 'Next day')}</button>
     <p class="muted small" id="sum-save"></p>
   </div>`;
   $('summary').hidden = false;
-  $('sum-save').textContent = save() ? 'Partie sauvegardée.' : 'Sauvegarde impossible dans ce navigateur : la partie continue sans.';
+  $('sum-save').textContent = save() ? L('Partie sauvegardée.', 'Game saved.') : L('Sauvegarde impossible dans ce navigateur : la partie continue sans.', 'Saving is not possible in this browser: the game continues without it.');
   $('btn-next-day').addEventListener('click', () => {
     club.nextDay();
     building.showCounter(club.counter);
@@ -320,7 +327,7 @@ function showSummary(s) {
     input.requestLock();
     save();
     rebuildColliders();
-    hud.notify(`Jour ${club.s.day} : bonne journée !`, 'info');
+    hud.notify(L(`Jour ${club.s.day} : bonne journée !`, `Day ${club.s.day}: have a good day!`), 'info');
     announceDay();
   });
 }
@@ -347,7 +354,7 @@ input.onKey = (code) => {
   if (code === 'KeyE') interact();
   if (code === 'KeyG') dropHeld();
   if (code === 'Tab') openUi('computer');
-  if (code === 'KeyM') { $('btn-mute').textContent = audio.toggle() ? 'Activer le son' : 'Couper le son'; }
+  if (code === 'KeyM') { $('btn-mute').textContent = audio.toggle() ? L('Activer le son', 'Unmute') : L('Couper le son', 'Mute'); }
 };
 
 input.onClick = (button, phase) => {
@@ -359,9 +366,9 @@ input.onClick = (button, phase) => {
     if (held && t.kind === 'shelf') {
       const r = club.placeItem(held, t.shelf, t.level);
       if (r === 'ok') { audio.place(); completeObjective('shelf'); }
-      else if (r === 'full') { hud.notify('Cette tablette est pleine', 'bad'); audio.error(); }
-      else if (r === 'other') { hud.notify('Un autre produit est déjà rangé ici', 'bad'); audio.error(); }
-      else if (r === 'none') { hud.notify('Achète d\'abord cette étagère sur l\'ordinateur', 'bad'); audio.error(); }
+      else if (r === 'full') { hud.notify(L('Cette tablette est pleine', 'This shelf is full'), 'bad'); audio.error(); }
+      else if (r === 'other') { hud.notify(L('Un autre produit est déjà rangé ici', 'Another product is already stocked here'), 'bad'); audio.error(); }
+      else if (r === 'none') { hud.notify(L('Achète d\'abord cette étagère sur l\'ordinateur', 'Buy this shelf on the computer first'), 'bad'); audio.error(); }
       else if (r === 'zone') { hud.notify(zoneMessage(held.product), 'bad'); audio.error(); }
     } else if (t.kind === 'scan' && !t.done) club.scan(t.uid);
     else if (t.kind === 'card' && club.counter.phase === 'pay' && club.counter.method === 'card') openUi('card');
@@ -370,14 +377,14 @@ input.onClick = (button, phase) => {
     if (held && t.kind === 'shelf') {
       const r = club.takeItem(held, t.shelf, t.level);
       if (r === 'ok') audio.pick();
-      else if (r === 'full') hud.notify('Le carton est plein', 'bad');
+      else if (r === 'full') hud.notify(L('Le carton est plein', 'The box is full'), 'bad');
     } else if (!held && t.kind === 'shelf') club.clearLevel(t.shelf, t.level);
   }
 };
 
 function zoneMessage(product) {
   const z = PRODUCTS[product].zone;
-  return z === 'bar' ? 'Ce produit se range dans le frigo de la buvette' : z === 'snack' ? 'Ce produit se range dans la vitrine du snack' : 'Ce produit se range dans la boutique du club-house';
+  return z === 'bar' ? L('Ce produit se range dans le frigo de la buvette', 'This product goes in the bar fridge') : z === 'snack' ? L('Ce produit se range dans la vitrine du snack', 'This product goes in the snack bar display') : L('Ce produit se range dans la boutique du club-house', 'This product goes in the clubhouse shop');
 }
 function orderText(cust) {
   return cust.order.map(o => `${o.qty} × ${PRODUCTS[o.product].short}`).join(' + ');
@@ -394,7 +401,7 @@ function nearOvertimeCourt() {
 }
 function evictAt(courtId) {
   const r = club.evict(courtId, 'player');
-  if (r === 'ok') { audio.whistle(); hud.notify('Les joueurs libèrent le terrain', 'good'); }
+  if (r === 'ok') { audio.whistle(); hud.notify(L('Les joueurs libèrent le terrain', 'The players are leaving the court'), 'good'); }
   else if (r === 'refused') audio.error();
 }
 
@@ -407,7 +414,7 @@ function interact() {
   if (!t) return;
   if (t.kind === 'stand') {
     const r = club.serveStand(t.stand);
-    if (r === 'none') hud.notify('Personne n\'attend au comptoir', 'info');
+    if (r === 'none') hud.notify(L('Personne n\'attend au comptoir', 'Nobody is waiting at the counter'), 'info');
     else if (r === 'ok') completeObjective('serve');
     return;
   }
@@ -427,7 +434,7 @@ function interact() {
   else if (t.kind === 'sign') {
     const open = club.toggleOpen();
     audio.click();
-    if (open) { completeObjective('open'); hud.notify('Le club est ouvert : les premiers clients arrivent', 'good'); }
+    if (open) { completeObjective('open'); hud.notify(L('Le club est ouvert : les premiers clients arrivent', 'The club is open: the first customers are arriving'), 'good'); }
   }
 }
 
@@ -458,44 +465,44 @@ function updateTarget(dt) {
   if (t) {
     if (t.kind === 'shelf') {
       const lvl = club.s.shelves[t.shelf].levels[t.level];
-      const name = lvl.product ? `${PRODUCTS[lvl.product].short} · ${lvl.qty} / ${PRODUCTS[lvl.product].shelf}` : 'Emplacement libre';
+      const name = lvl.product ? `${PRODUCTS[lvl.product].short} · ${lvl.qty} / ${PRODUCTS[lvl.product].shelf}` : L('Emplacement libre', 'Empty slot');
       if (held) {
         if (SHELF_SLOTS[t.shelf].zone !== PRODUCTS[held.product].zone) hint = `${name}<br><span class="warn">${zoneMessage(held.product)}</span>`;
-        else if (lvl.product && lvl.product !== held.product && lvl.qty > 0) hint = `${name}<br><span class="warn">Un autre produit est rangé ici</span>`;
-        else hint = `${name}<br>${key('Clic gauche')} Ranger · ${key('Clic droit')} Reprendre`;
-      } else hint = lvl.product && lvl.qty === 0 ? `${name}<br>${key('Clic droit')} Retirer l'étiquette` : name;
+        else if (lvl.product && lvl.product !== held.product && lvl.qty > 0) hint = `${name}<br><span class="warn">${L('Un autre produit est rangé ici', 'Another product is stocked here')}</span>`;
+        else hint = `${name}<br>${key(L('Clic gauche', 'Left click'))} ${L('Ranger', 'Stock')} · ${key(L('Clic droit', 'Right click'))} ${L('Reprendre', 'Take back')}`;
+      } else hint = lvl.product && lvl.qty === 0 ? `${name}<br>${key(L('Clic droit', 'Right click'))} ${L("Retirer l'étiquette", 'Remove the label')}` : name;
     } else if (t.kind === 'box' && !held) {
       const box = club.s.boxes.find(b => b.id === t.id);
-      if (box) hint = `${key('E')} Prendre le carton · ${PRODUCTS[box.product].short} (${box.qty})`;
-    } else if (t.kind === 'laptop') hint = `${key('E')} Utiliser l'ordinateur`;
-    else if (t.kind === 'sign') hint = `${key('E')} ${club.s.open ? 'Fermer le club' : 'Ouvrir le club'}`;
-    else if (t.kind === 'scan' && !t.done) hint = `${key('Clic')} Scanner l'article`;
-    else if (t.kind === 'card') hint = club.counter.phase === 'pay' && club.counter.method === 'card' ? `${key('Clic')} Encaisser par carte` : 'Terminal de paiement';
-    else if (t.kind === 'cash') hint = club.counter.phase === 'pay' && club.counter.method === 'cash' ? `${key('Clic')} Ouvrir le tiroir-caisse` : 'Tiroir-caisse';
+      if (box) hint = `${key('E')} ${L('Prendre le carton', 'Pick up the box')} · ${PRODUCTS[box.product].short} (${box.qty})`;
+    } else if (t.kind === 'laptop') hint = `${key('E')} ${L("Utiliser l'ordinateur", 'Use the computer')}`;
+    else if (t.kind === 'sign') hint = `${key('E')} ${club.s.open ? L('Fermer le club', 'Close the club') : L('Ouvrir le club', 'Open the club')}`;
+    else if (t.kind === 'scan' && !t.done) hint = `${key(L('Clic', 'Click'))} ${L("Scanner l'article", 'Scan the item')}`;
+    else if (t.kind === 'card') hint = club.counter.phase === 'pay' && club.counter.method === 'card' ? `${key(L('Clic', 'Click'))} ${L('Encaisser par carte', 'Take card payment')}` : L('Terminal de paiement', 'Payment terminal');
+    else if (t.kind === 'cash') hint = club.counter.phase === 'pay' && club.counter.method === 'cash' ? `${key(L('Clic', 'Click'))} ${L('Ouvrir le tiroir-caisse', 'Open the cash drawer')}` : L('Tiroir-caisse', 'Cash drawer');
     else if (t.kind === 'stand') {
       const cust = club.standOrder(t.stand);
       const name = t.stand === 'buvette' ? 'Buvette' : 'Snack';
       if (cust) {
         const missing = cust.order.find(o => club.standStock(t.stand, o.product) < o.qty);
-        hint = `${name} · commande : ${orderText(cust)}${missing ? `<br><span class="warn">Stock insuffisant : ${PRODUCTS[missing.product].short}</span>` : ''}<br>${key('E')} Servir`;
-      } else hint = `${name} · personne n'attend`;
+        hint = `${name} · ${L('commande :', 'order:')} ${orderText(cust)}${missing ? `<br><span class="warn">${L('Stock insuffisant :', 'Not enough stock:')} ${PRODUCTS[missing.product].short}</span>` : ''}<br>${key('E')} ${L('Servir', 'Serve')}`;
+      } else hint = `${name} · ${L("personne n'attend", 'nobody waiting')}`;
     } else if (t.kind === 'court') {
       const st = club.s.courts[t.court];
-      if (!club.canClean(t.court)) hint = 'Partie en cours';
-      else if (st.wear > 0.02) hint = `${key('Maintenir E')} Brosser le terrain · usure ${(st.wear * 100).toFixed(0)} %`;
-      else hint = 'Terrain impeccable';
+      if (!club.canClean(t.court)) hint = L('Partie en cours', 'Match in progress');
+      else if (st.wear > 0.02) hint = `${key(L('Maintenir E', 'Hold E'))} ${L('Brosser le terrain', 'Brush the court')} · ${L('usure', 'wear')} ${(st.wear * 100).toFixed(0)}${EN ? '' : ' '}%`;
+      else hint = L('Terrain impeccable', 'Court in perfect shape');
     }
   }
   // Brossage : maintenir E en visant un terrain.
   if (t?.kind === 'court' && input.down('KeyE') && club.canClean(t.court) && club.s.courts[t.court].wear > 0.02) {
     ui.progress += dt / 2.8;
     audio.brushing(true);
-    if (ui.progress >= 1) { club.clean(t.court); ui.progress = 0; audio.brushing(false); audio.place(); completeObjective('clean'); hud.notify('Terrain brossé', 'good'); }
+    if (ui.progress >= 1) { club.clean(t.court); ui.progress = 0; audio.brushing(false); audio.place(); completeObjective('clean'); hud.notify(L('Terrain brossé', 'Court brushed'), 'good'); }
   } else { ui.progress = 0; audio.brushing(false); }
   // Près d'un terrain dont le créneau est dépassé : on peut faire sortir les joueurs.
   if (!hint || t?.kind === 'court') {
     const oc = nearOvertimeCourt();
-    if (oc) hint = `<span class="warn">${COURTS.find(c => c.id === oc).label} : créneau dépassé !</span><br>${key('E')} Faire sortir les joueurs`;
+    if (oc) hint = `<span class="warn">${L(`${COURTS.find(c => c.id === oc).label} : créneau dépassé !`, `${COURTS.find(c => c.id === oc).label}: slot overrun!`)}</span><br>${key('E')} ${L('Faire sortir les joueurs', 'Send the players off')}`;
   }
   ui.hint = hint;
 }
@@ -509,19 +516,25 @@ function confirmNew() {
   const btn = $('btn-new');
   if (btn.dataset.confirm) return true;
   btn.dataset.confirm = '1';
-  btn.textContent = 'Écraser la sauvegarde ?';
-  setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = 'Nouvelle partie'; }, 3000);
+  btn.textContent = L('Écraser la sauvegarde ?', 'Overwrite your save?');
+  setTimeout(() => { btn.dataset.confirm = ''; btn.textContent = L('Nouvelle partie', 'New game'); }, 3000);
   return false;
 }
 $('btn-continue').addEventListener('click', () => { const s = load(); if (s) startGame(s); });
 $('btn-continue').hidden = !hasSave();
 $('btn-resume').addEventListener('click', resume);
-$('btn-save').addEventListener('click', () => { $('save-status').textContent = save() ? 'Partie sauvegardée.' : 'Sauvegarde impossible dans ce navigateur.'; });
+$('btn-save').addEventListener('click', () => { $('save-status').textContent = save() ? L('Partie sauvegardée.', 'Game saved.') : L('Sauvegarde impossible dans ce navigateur.', 'Saving is not possible in this browser.'); });
 $('btn-quit').addEventListener('click', () => { save(); location.reload(); });
+// Changer de langue : la partie est sauvegardée, puis la page se recharge dans l'autre langue.
+for (const id of ['btn-lang', 'btn-lang-pause']) $(id)?.addEventListener('click', () => {
+  if (club && mode !== 'menu') save();
+  setLang(EN ? 'fr' : 'en');
+  location.reload();
+});
 $('click-to-play').addEventListener('click', () => input.requestLock());
-$('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? 'Activer le son' : 'Couper le son'; });
+$('btn-mute').addEventListener('click', e => { e.currentTarget.textContent = audio.toggle() ? L('Activer le son', 'Unmute') : L('Couper le son', 'Mute'); });
 const qBtn = $('btn-quality');
-const qLabel = () => { qBtn.textContent = { ultra: 'Graphismes : ultra', high: 'Graphismes : haute qualité', low: 'Graphismes : mode économie' }[quality]; };
+const qLabel = () => { qBtn.textContent = { ultra: L('Graphismes : ultra', 'Graphics: ultra'), high: L('Graphismes : haute qualité', 'Graphics: high quality'), low: L('Graphismes : mode économie', 'Graphics: power saving') }[quality]; };
 qLabel();
 qBtn.addEventListener('click', () => {
   quality = QUALITIES[(QUALITIES.indexOf(quality) + 1) % QUALITIES.length];
@@ -538,7 +551,7 @@ function watchPerf(dt) {
   perf.done = true;
   if (perf.frames / perf.t < 28 && quality !== 'low') {
     quality = 'low'; applyQuality(); qLabel();
-    hud.notify('Graphismes passés en mode économie pour plus de fluidité (modifiable dans le menu)', 'info');
+    hud.notify(L('Graphismes passés en mode économie pour plus de fluidité (modifiable dans le menu)', 'Graphics switched to power saving for smoother play (change it in the menu)'), 'info');
   }
 }
 

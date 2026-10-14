@@ -6,6 +6,7 @@ import { COURTS, COURT_TYPES } from '../game/data.js';
 import { clayTexture, hardTexture, padelTexture, wearTexture, meshTexture, gravelTexture, canvasTexture } from './textures.js';
 import { clamp, rand, fmtMoney0 } from '../core/util.js';
 import { pbr, images, assets, modelAtHeight } from './assets.js';
+import { L } from '../core/i18n.js';
 
 // Détail photographique ajouté à une surface dessinée (relief et rugosité répétés finement).
 function detail(mat, name, repeat, normalScale = 1) {
@@ -325,7 +326,7 @@ export function createCourts(scene, state, interactables, onBallHit) {
 
   function updatePlotSign(v) {
     const lines = [v.def.label.toUpperCase(), COURT_TYPES[v.def.surface].name, fmtMoney0(v.def.price),
-      state.level >= v.def.level ? 'À construire' : `Niveau ${v.def.level} requis`];
+      state.level >= v.def.level ? L('À construire', 'For sale') : L(`Niveau ${v.def.level} requis`, `Level ${v.def.level} required`)];
     v.plot.signMat.map?.dispose();
     v.plot.signMat.map = signTexture(lines, state.level >= v.def.level ? '#1f6b4a' : '#8a918d');
     v.plot.signMat.needsUpdate = true;

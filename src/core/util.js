@@ -1,4 +1,5 @@
 // Petits outils partagés.
+import { EN } from './i18n.js';
 
 export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 export const lerp = (a, b, t) => a + (b - a) * t;
@@ -18,8 +19,10 @@ export const pick = arr => arr[Math.floor(Math.random() * arr.length)];
 // Arrondi aux 10 centimes, comme les prix du club.
 export const round10 = v => Math.round(v * 10) / 10;
 
-export const fmtMoney = v => `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
-export const fmtMoney0 = v => `${Math.round(v).toLocaleString('fr-FR')} €`;
+// Montants : « 1 234,50 € » en français, « €1,234.50 » en anglais.
+export const fmtMoney = v => EN ? `${v < 0 ? '-' : ''}€${Math.abs(v).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  : `${v.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} €`;
+export const fmtMoney0 = v => EN ? `${v < 0 ? '-' : ''}€${Math.abs(Math.round(v)).toLocaleString('en-GB')}` : `${Math.round(v).toLocaleString('fr-FR')} €`;
 export const fmtClock = minutes => {
   const h = Math.floor(minutes / 60) % 24, m = Math.floor(minutes % 60);
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;

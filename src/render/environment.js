@@ -9,6 +9,7 @@ import { CLUB, COURT_SLOTS, PARKING_SPOTS } from '../game/layout.js';
 import { pbr, breakTiling, modelAtHeight, assets } from './assets.js';
 import { createSky } from './sky.js';
 import { createTrees, hedgeMesh, updateWind } from './trees.js';
+import { L } from '../core/i18n.js';
 
 // Couleur de la lumière du soleil selon l'heure (matin, midi, coucher, nuit).
 const KEYS = [
@@ -171,7 +172,7 @@ export function createEnvironment(scene, renderer) {
   }
 
   // --- Panneau d'entrée du club ---------------------------------------------------------------------
-  const signTex = labelTexture('TENNIS CLUB DES PLATANES', { w: 1024, h: 160, bg: '#1f6b4a', fg: '#ffffff', font: '700 70px Outfit, Arial, sans-serif', accent: '#e4f05a' });
+  const signTex = labelTexture(L('TENNIS CLUB DES PLATANES', 'PLANE TREES TENNIS CLUB'), { w: 1024, h: 160, bg: '#1f6b4a', fg: '#ffffff', font: '700 70px Outfit, Arial, sans-serif', accent: '#e4f05a' });
   const green = new THREE.MeshStandardMaterial({ color: 0x1f6b4a, roughness: 0.5 });
   const face = new THREE.MeshStandardMaterial({ map: signTex, roughness: 0.45 });
   const board = new THREE.Mesh(new THREE.BoxGeometry(5.2, 0.8, 0.12), [green, green, green, green, face, face]);

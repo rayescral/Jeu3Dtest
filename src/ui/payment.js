@@ -1,5 +1,6 @@
 // Encaissement : terminal de carte (taper le montant) et tiroir-caisse (rendre la monnaie).
 import { fmtMoney } from '../core/util.js';
+import { L, EN } from '../core/i18n.js';
 
 const $ = id => document.getElementById(id);
 const NOTES = [50, 20, 10, 5];
@@ -12,14 +13,14 @@ export function createPayment(club, { sound, onClose, notify, onPaid }) {
   const sum = () => Math.round(given.reduce((a, b) => a + b, 0) * 100) / 100;
 
   function cardView() {
-    const shown = typed ? `${typed.replace('.', ',')} €` : '0,00 €';
+    const shownTyped = typed ? (EN ? `€${typed}` : `${typed.replace('.', ',')} €`) : (EN ? '€0.00' : '0,00 €');
     return `<div class="terminal">
-      <div class="term-screen"><small>Montant à débiter</small><b>${shown}</b></div>
+      <div class="term-screen"><small>${L('Montant à débiter', 'Amount to charge')}</small><b>${shownTyped}</b></div>
       <div class="keypad">
-        ${['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map(k => `<button data-key="${k}">${k}</button>`).join('')}
-        <button class="red" data-key="esc">Annuler</button><button class="green wide" data-key="ok">Valider</button>
+        ${['1', '2', '3', '4', '5', '6', '7', '8', '9', ',', '0', '⌫'].map(k => `<button data-key="${k}">${k === ',' && EN ? '.' : k}</button>`).join('')}
+        <button class="red" data-key="esc">${L('Annuler', 'Cancel')}</button><button class="green wide" data-key="ok">${L('Valider', 'Confirm')}</button>
       </div>
-      <p class="muted small">Le total s'affiche sur l'écran de la caisse : ${fmtMoney(club.counter.total)}. Clavier : chiffres, virgule, Entrée.</p>
+      <p class="muted small">${L(`Le total s'affiche sur l'écran de la caisse : ${fmtMoney(club.counter.total)}. Clavier : chiffres, virgule, Entrée.`, `The total is shown on the till screen: ${fmtMoney(club.counter.total)}. Keyboard: digits, decimal point, Enter.`)}</p>
     </div>`;
   }
 
@@ -28,25 +29,25 @@ export function createPayment(club, { sound, onClose, notify, onPaid }) {
     const state = Math.abs(s - due) < 0.001 ? 'good' : s > due ? 'over' : 'short';
     return `<div class="drawer">
       <div class="drawer-head">
-        <div><span>Total</span><b>${fmtMoney(c.total)}</b></div>
-        <div><span>Reçu</span><b>${fmtMoney(c.given)}</b></div>
-        <div class="due"><span>À rendre</span><b>${fmtMoney(due)}</b></div>
+        <div><span>${L('Total', 'Total')}</span><b>${fmtMoney(c.total)}</b></div>
+        <div><span>${L('Reçu', 'Received')}</span><b>${fmtMoney(c.given)}</b></div>
+        <div class="due"><span>${L('À rendre', 'Change due')}</span><b>${fmtMoney(due)}</b></div>
       </div>
       <div class="tray">
-        ${NOTES.map(v => `<button class="note n${v}" data-v="${v}"><span>${v} €</span></button>`).join('')}
-        ${COINS.map(v => `<button class="coin c${String(v).replace('.', '')}" data-v="${v}"><span>${v >= 1 ? v + ' €' : Math.round(v * 100) + ' c'}</span></button>`).join('')}
+        ${NOTES.map(v => `<button class="note n${v}" data-v="${v}"><span>${EN ? '€' + v : v + ' €'}</span></button>`).join('')}
+        ${COINS.map(v => `<button class="coin c${String(v).replace('.', '')}" data-v="${v}"><span>${v >= 1 ? (EN ? '€' + v : v + ' €') : Math.round(v * 100) + ' c'}</span></button>`).join('')}
       </div>
       <div class="given">
-        <div class="chips">${given.map((v, i) => `<button class="chip" data-i="${i}" title="Reprendre">${fmtMoney(v)}</button>`).join('') || '<span class="muted">Clique sur les billets et les pièces à rendre</span>'}</div>
-        <div class="given-total ${state}"><span>Rendu</span><b>${fmtMoney(s)}</b></div>
+        <div class="chips">${given.map((v, i) => `<button class="chip" data-i="${i}" title="${L('Reprendre', 'Take back')}">${fmtMoney(v)}</button>`).join('') || `<span class="muted">${L('Clique sur les billets et les pièces à rendre', 'Click the notes and coins to give back')}</span>`}</div>
+        <div class="given-total ${state}"><span>${L('Rendu', 'Given')}</span><b>${fmtMoney(s)}</b></div>
       </div>
-      <div class="drawer-actions"><button class="ghost" data-act="clear">Tout reprendre</button><button class="green" data-act="ok">Rendre la monnaie</button></div>
+      <div class="drawer-actions"><button class="ghost" data-act="clear">${L('Tout reprendre', 'Take all back')}</button><button class="green" data-act="ok">${L('Rendre la monnaie', 'Give change')}</button></div>
     </div>`;
   }
 
   function render() {
-    root.innerHTML = `<div class="pay-card"><header><h2>${mode === 'card' ? 'Terminal de paiement' : 'Tiroir-caisse'}</h2>
-      <button class="close" data-act="close" aria-label="Fermer">×</button></header>${mode === 'card' ? cardView() : cashView()}</div>`;
+    root.innerHTML = `<div class="pay-card"><header><h2>${mode === 'card' ? L('Terminal de paiement', 'Payment terminal') : L('Tiroir-caisse', 'Cash drawer')}</h2>
+      <button class="close" data-act="close" aria-label="${L('Fermer', 'Close')}">×</button></header>${mode === 'card' ? cardView() : cashView()}</div>`;
   }
 
   function press(k) {
@@ -67,14 +68,14 @@ export function createPayment(club, { sound, onClose, notify, onPaid }) {
   function submitCard() {
     const v = parseFloat(typed || '0');
     if (club.payCard(v)) { sound.card(); finish(); }
-    else { sound.error(); notify('Montant incorrect : vérifie le total affiché en caisse', 'bad'); typed = ''; render(); }
+    else { sound.error(); notify(L('Montant incorrect : vérifie le total affiché en caisse', 'Wrong amount: check the total on the till'), 'bad'); typed = ''; render(); }
   }
 
   function submitCash() {
     const r = club.payCash(sum());
-    if (r === 'ok') notify('Monnaie exacte, merci !', 'good');
-    else if (r === 'short') notify('Il manquait de la monnaie : le client est mécontent', 'bad');
-    else if (r === 'over') notify('Tu as rendu trop de monnaie', 'bad');
+    if (r === 'ok') notify(L('Monnaie exacte, merci !', 'Exact change, thanks!'), 'good');
+    else if (r === 'short') notify(L('Il manquait de la monnaie : le client est mécontent', 'Not enough change: the customer is unhappy'), 'bad');
+    else if (r === 'over') notify(L('Tu as rendu trop de monnaie', 'You gave back too much change'), 'bad');
     finish();
   }
 

@@ -6,6 +6,8 @@ const { chromium } = require('playwright');
 const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 p.setDefaultTimeout(180000);
+// Les vérifications portent sur les textes français (le navigateur de test est réglé en anglais).
+await p.addInitScript(() => { localStorage.setItem('tennis-club-lang', 'fr'); });
 const errs = []; p.on('pageerror', e => errs.push('PAGE ' + e.message)); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
 await p.route('https://fonts.googleapis.com/**', r => r.fulfill({ body: '', contentType: 'text/css' }));
 await p.goto('file://' + require('path').resolve(__dirname, '../index.html'));

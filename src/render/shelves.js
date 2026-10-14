@@ -6,6 +6,7 @@ import { productMesh } from './products.js';
 import { fmtMoney } from '../core/util.js';
 import { canvasTexture } from './textures.js';
 import { ZONE_LABEL } from '../game/data.js';
+import { L } from '../core/i18n.js';
 
 export const LEVEL_Y = [0.16, 0.72, 1.28];     // hauteur du dessus de chaque tablette
 const W = 2.1, D = 0.6;
@@ -48,11 +49,11 @@ function headerMat(zone, label) {
 function category(id) {
   const P = PRODUCTS[id];
   if (P.racket === 'padel' || id === 'padelballs') return 'PADEL';
-  if (P.racket) return 'RAQUETTES';
-  if (['balls', 'grip', 'strings', 'wristband'].includes(id)) return 'BALLES & ACCESSOIRES';
-  if (['water', 'iso', 'energy'].includes(id)) return 'BOISSONS & ÉNERGIE';
-  if (['cap', 'towel', 'tshirt'].includes(id)) return 'TEXTILE DU CLUB';
-  return 'ÉQUIPEMENT';
+  if (P.racket) return L('RAQUETTES', 'RACKETS');
+  if (['balls', 'grip', 'strings', 'wristband'].includes(id)) return L('BALLES & ACCESSOIRES', 'BALLS & ACCESSORIES');
+  if (['water', 'iso', 'energy'].includes(id)) return L('BOISSONS & ÉNERGIE', 'DRINKS & ENERGY');
+  if (['cap', 'towel', 'tshirt'].includes(id)) return L('TEXTILE DU CLUB', 'CLUB APPAREL');
+  return L('ÉQUIPEMENT', 'EQUIPMENT');
 }
 const backMats = {
   shop: new THREE.MeshStandardMaterial({ color: 0x1f6b4a, roughness: 0.7 }),
@@ -78,7 +79,7 @@ function drawTag(tag, product, price, qty) {
     if (qty === 0) { g.fillStyle = 'rgba(192,57,43,0.12)'; g.fillRect(0, 0, w, h); }
   } else {
     g.fillStyle = '#8a918d'; g.font = '500 30px Outfit, Arial'; g.textAlign = 'center'; g.textBaseline = 'middle';
-    g.fillText('Emplacement libre', w / 2, h / 2);
+    g.fillText(L('Emplacement libre', 'Empty slot'), w / 2, h / 2);
   }
   tag.t.needsUpdate = true;
 }
@@ -108,7 +109,7 @@ export function createShelves(scene, interactables, state) {
       add(new THREE.BoxGeometry(W + 0.08, 2.05, 0.06), body, 0, 1.025, -D / 2 + 0.03);
       for (const x of [-W / 2 - 0.02, W / 2 + 0.02]) add(new THREE.BoxGeometry(0.06, 2.05, D + 0.04), body, x, 1.025, 0);
       add(new THREE.BoxGeometry(W + 0.1, 0.12, D + 0.06), body, 0, 0.06, 0);
-      add(new THREE.BoxGeometry(W + 0.1, 0.22, D + 0.06), headerMat('bar', 'BOISSONS FRAÎCHES'), 0, 2.1, 0);
+      add(new THREE.BoxGeometry(W + 0.1, 0.22, D + 0.06), headerMat('bar', L('BOISSONS FRAÎCHES', 'COLD DRINKS')), 0, 2.1, 0);
       const inner = new THREE.MeshStandardMaterial({ color: 0xe8f4ff, emissive: 0xcfe8ff, emissiveIntensity: 0.6, roughness: 0.4 });
       add(new THREE.PlaneGeometry(W, 1.85), inner, 0, 1.05, -D / 2 + 0.065);
       const glass = new THREE.MeshStandardMaterial({ color: 0xdff1f7, roughness: 0.05, metalness: 0.1, transparent: true, opacity: 0.16, depthWrite: false });
@@ -125,7 +126,7 @@ export function createShelves(scene, interactables, state) {
       for (const x of [-W / 2 + 0.025, W / 2 - 0.025]) add(new THREE.BoxGeometry(0.05, 2.0, 0.05), metal, x, 1.0, -D / 2 + 0.05);
       for (const x of [-W / 2 + 0.025, W / 2 - 0.025]) add(new THREE.BoxGeometry(0.04, 0.08, D), metal, x, 0.06, 0);
       add(new THREE.BoxGeometry(W - 0.06, 1.85, 0.02), zone === 'snack' ? (backMats.snack) : pegMat, 0, 1.02, -D / 2 + 0.04);
-      const label = zone === 'snack' ? 'SNACK' : 'BOUTIQUE DU CLUB';
+      const label = zone === 'snack' ? L('SNACK', 'SNACK BAR') : L('BOUTIQUE DU CLUB', 'CLUB SHOP');
       const header = add(new THREE.BoxGeometry(W, 0.26, 0.04), [metal, metal, metal, metal, headerMat(zone, label), metal], 0, 2.12, -D / 2 + 0.06);
       header.castShadow = false;
       u.header = header; u.headerLabel = label;
@@ -163,7 +164,7 @@ export function createShelves(scene, interactables, state) {
       const counts = {};
       for (const l of st.levels) if (l.product) { const c = category(l.product); counts[c] = (counts[c] || 0) + 1; }
       const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
-      const label = best ? best[0] : 'BOUTIQUE DU CLUB';
+      const label = best ? best[0] : L('BOUTIQUE DU CLUB', 'CLUB SHOP');
       if (label !== u.headerLabel) { u.headerLabel = label; u.header.material[4] = headerMat(u.slot.zone, label); }
     }
     st.levels.forEach((lvl, li) => {
