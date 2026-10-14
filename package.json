@@ -11,7 +11,8 @@
     "dev": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --outfile=web/jeu.js",
     "release": "npm run dev && cp web/index.html web/style.css . && cp web/jeu.js jeu.js",
     "assets": "python3 tools/assets/fetch.py && node tools/assets/build.mjs",
-    "humans": "blender -b --python tools/assets/humans.py -- assets-src/humans && node tools/assets/humans.mjs"
+    "humans": "blender -b --python tools/assets/humans.py -- assets-src/humans && node tools/assets/humans.mjs",
+    "release:exe": "npm run dev && mkdir -p exe && cp web/index.html web/style.css web/jeu.js exe/"
   },
   "devDependencies": {
     "@gltf-transform/core": "^4.1.0",

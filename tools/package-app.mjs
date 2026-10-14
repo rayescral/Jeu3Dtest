@@ -2,16 +2,18 @@
 // (quelques Mo). À chaque lancement, il récupère la dernière version du jeu publiée sur GitHub. Il utilise le moteur web déjà présent dans Windows 10 et 11 (WebView2), grâce à
 // Neutralinojs. Lancer : npm run app   (résultat dans dist/)
 import { execSync } from 'node:child_process';
-import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync, renameSync, readdirSync } from 'node:fs';
+import { cpSync, mkdirSync, rmSync, existsSync, writeFileSync, renameSync, readdirSync, readFileSync } from 'node:fs';
 
 const VERSION = '6.3.0';
 const stage = 'dist/neu';
-rmSync('dist', { recursive: true, force: true });
+rmSync('dist/neu', { recursive: true, force: true });
+rmSync('dist/Tennis Club Simulator', { recursive: true, force: true });
 mkdirSync(`${stage}/app/game`, { recursive: true });
 mkdirSync(`${stage}/bin`, { recursive: true });
 // Lanceur (mise à jour automatique depuis GitHub) + copie du jeu pour jouer sans connexion.
-cpSync('desktop/loader.html', `${stage}/app/index.html`);
-for (const f of ['index.html', 'style.css', 'jeu.js']) cpSync(f, `${stage}/app/game/${f}`);
+// L'application suit le canal « exe/ » (versions publiées avec npm run release:exe, essayées avant itch.io).
+writeFileSync(`${stage}/app/index.html`, readFileSync('desktop/loader.html', 'utf8').replace("const CHANNEL = '';", "const CHANNEL = 'exe/';"));
+for (const f of ['index.html', 'style.css', 'jeu.js']) cpSync(`exe/${f}`, `${stage}/app/game/${f}`);
 // Ressources graphiques (textures, ciels, modèles) : le jeu fonctionne aussi hors connexion.
 cpSync('assets', `${stage}/app/game/assets`, { recursive: true });
 cpSync('desktop/icon.png', `${stage}/app/icon.png`);

@@ -14,9 +14,12 @@
     // Lanceur de l'application : au démarrage, il télécharge la dernière version du jeu publiée sur GitHub
     // (index.html, style.css, jeu.js), la garde en mémoire pour jouer hors connexion, puis l'affiche.
     // Sans connexion, il utilise la dernière version téléchargée, sinon celle livrée avec le programme.
-    const REMOTE = 'https://raw.githubusercontent.com/rayescral/jeu3dtest/claude/gallant-pasteur-0xlwe2/';
+    // Canal : '' pour itch.io (fichiers à la racine du dépôt), 'exe/' pour l'application Windows, qui reçoit
+    // les nouvelles versions en premier pour être essayées avant itch.io (remplacé par tools/package-app.mjs).
+    const CHANNEL = '';
+    const REMOTE = 'https://raw.githubusercontent.com/rayescral/jeu3dtest/claude/gallant-pasteur-0xlwe2/' + CHANNEL;
     const FILES = ['index.html', 'style.css', 'jeu.js'];
-    const CACHE = 'tennis-club-sim-update';
+    const CACHE = 'tennis-club-sim-update' + (CHANNEL ? '-' + CHANNEL.replace('/', '') : '');
 
     const withTimeout = (p, ms) => Promise.race([p, new Promise((_, no) => setTimeout(() => no(new Error('délai dépassé')), ms))]);
     async function download() {
