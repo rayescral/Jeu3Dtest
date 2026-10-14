@@ -527,10 +527,12 @@ qBtn.addEventListener('click', () => {
 
 // --- Boucle -----------------------------------------------------------------------------------------------
 const clock = new THREE.Clock();
-let menuT = 0, birdT = 4, stepPhase = 0;
+let menuT = 0, birdT = 4, stepPhase = 0, lastW = 0, lastH = 0;
 
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
+  // Si la fenêtre a changé de taille sans prévenir (passage en plein écran), on réajuste l'image.
+  if (lastW !== innerWidth || lastH !== innerHeight) { lastW = innerWidth; lastH = innerHeight; fit(); }
   if (mode === 'menu') {
     // Plan large autour du club derrière l'écran titre.
     menuT += dt * 0.05;

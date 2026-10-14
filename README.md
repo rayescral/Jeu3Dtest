@@ -8,6 +8,12 @@ Au départ, le club des Platanes a un seul court en terre battue, deux étagère
 
 **Double-clique sur `index.html`.** Le jeu s'ouvre dans le navigateur, sans serveur ni installation (comme Justice Deck). Il faut seulement les fichiers `index.html`, `style.css` et `jeu.js` dans le même dossier.
 
+## Version application (Windows)
+
+Le jeu existe aussi en vrai programme, dans sa propre fenêtre en plein écran, sans navigateur : décompresse le zip « Tennis Club Simulator - Windows » et lance `Tennis Club Simulator.exe` (F11 : plein écran ou fenêtre). Les sauvegardes restent sur l'ordinateur.
+
+Pour fabriquer cette version : `npm run app` (le résultat est dans `dist/`). Elle est construite avec Electron, à partir des mêmes fichiers `index.html`, `style.css` et `jeu.js` ; le code de la fenêtre est dans `desktop/`.
+
 ## Développer
 
 Le code source est dans `src/` (modules JavaScript). `jeu.js` est généré à partir de ces sources :

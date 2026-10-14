@@ -5,10 +5,13 @@
   "scripts": {
     "build": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --outfile=jeu.js",
     "start": "python3 -m http.server 8000",
-    "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs"
+    "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs",
+    "app": "npm run build && node tools/package-app.mjs win32"
   },
   "devDependencies": {
+    "@electron/packager": "^20.3.0",
+    "electron": "^33.4.11",
     "esbuild": "0.24.0",
-    "three": "0.160.0"
+    "three": "^0.170.0"
   }
 }
