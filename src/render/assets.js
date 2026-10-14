@@ -8,7 +8,8 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 const REMOTE = 'https://raw.githubusercontent.com/rayescral/jeu3dtest/claude/gallant-pasteur-0xlwe2/';
 // Où chercher le dossier assets/ : à côté de la page, un cran au-dessus (dossier web/ de développement),
 // dans game/ (application et itch.io), puis sur GitHub.
-const BASES = ['', '../', 'game/', REMOTE];
+// Page ouverte depuis le disque (file://) : le navigateur interdit de lire les fichiers voisins, on va sur GitHub.
+const BASES = location.protocol === 'file:' ? [REMOTE] : ['', '../', 'game/', REMOTE];
 
 const TEXTURES = [
   'Grass001', 'PavingStones128', 'PavingStones136', 'Asphalt025C', 'Concrete034', 'WoodFloor051', 'PaintedPlaster017',
