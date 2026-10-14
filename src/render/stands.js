@@ -6,6 +6,7 @@ import { STANDS, PAY_MACHINE, PARKING_ROAD, PARKING_LANE_Z } from '../game/layou
 import { FACILITIES, PRODUCTS } from '../game/data.js';
 import { cladTexture, concreteTexture, canvasTexture } from './textures.js';
 import { productMesh } from './products.js';
+import { pbr, modelAtHeight, breakTiling } from './assets.js';
 import { createPersonView } from './people.js';
 import { clamp, fmtMoney, fmtMoney0 } from '../core/util.js';
 
@@ -36,6 +37,33 @@ const stripeTexture = (a, b) => canvasTexture(256, 64, (g, w, h) => {
   for (let i = 0; i < 8; i++) { g.fillStyle = i % 2 ? b : a; g.fillRect(i * w / 8, 0, w / 8, h); }
   g.fillStyle = 'rgba(0,0,0,0.12)'; g.fillRect(0, h - 6, w, 6);
 });
+
+// Toile de parasol à 8 pans, légèrement creusée entre les baleines, avec un bord festonné.
+let parasolGeo = null, bulbGeo = null, sockGeo = null;
+function parasolGeometry() {
+  const R = 1.3, ribs = 8, seg = 6, per = 6;
+  const pos = [], uv = [], idx = [];
+  const N = ribs * per;
+  for (let i = 0; i <= seg; i++) {
+    const r = (i / seg) * R;
+    for (let j = 0; j <= N; j++) {
+      const a = (j / N) * Math.PI * 2, f = (j % per) / per;
+      const sag = Math.sin(f * Math.PI) * 0.06 * (r / R);           // creux entre deux baleines
+      const y = 0.42 * (1 - r / R) ** 1.2 - sag;
+      pos.push(Math.cos(a) * r * (1 - sag * 0.5), y, Math.sin(a) * r * (1 - sag * 0.5));
+      uv.push(j / N, i / seg);   // une bande de couleur par pan
+    }
+  }
+  for (let i = 0; i < seg; i++) for (let j = 0; j < N; j++) {
+    const a = i * (N + 1) + j, b = a + N + 1;
+    idx.push(a, b, a + 1, a + 1, b, b + 1);
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  g.setIndex(idx); g.computeVertexNormals();
+  return g;
+}
 
 export function createStands(scene, interactables, state) {
   const views = {};
@@ -137,7 +165,7 @@ export function createStands(scene, interactables, state) {
       return holder;
     };
     const conc = concreteTexture();
-    const slabMat = new THREE.MeshStandardMaterial({ map: conc, roughness: 0.9 });
+    const slabMat = pbr('Concrete034', { repeat: [W / 2, 1], tint: 0xc9c5bc }) ?? new THREE.MeshStandardMaterial({ map: conc, roughness: 0.9 });
     part(boxMesh(W + 0.4, 0.12, D + 0.4, slabMat), cx, 0, cz, [0.02, 0.12]);
     // Carrelage intérieur.
     const tiles = canvasTexture(256, 256, (g, w, h) => {
@@ -145,15 +173,15 @@ export function createStands(scene, interactables, state) {
       g.strokeStyle = '#c9c2b4'; g.lineWidth = 3;
       for (let i = 0; i <= 4; i++) { g.beginPath(); g.moveTo(i * 64, 0); g.lineTo(i * 64, h); g.moveTo(0, i * 64); g.lineTo(w, i * 64); g.stroke(); }
     }, { repeat: [W / 1.2, D / 1.2] });
-    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.3, D - 0.3), new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.5 }));
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(W - 0.3, D - 0.3), pbr('Tiles107', { repeat: [W / 1.2, D / 1.2], roughness: 0.8 }) ?? new THREE.MeshStandardMaterial({ map: tiles, roughness: 0.5 }));
     floor.rotation.x = -Math.PI / 2;
     const fl = part(floor, cx, 0.125, cz, [0.12, 0.16], false);
     fl.children[0].receiveShadow = true;
 
     const clad = cladTexture().clone(); clad.needsUpdate = true;
     clad.wrapS = clad.wrapT = THREE.RepeatWrapping; clad.repeat.set(2, 1);
-    const wallMat = new THREE.MeshStandardMaterial({ map: clad, color: T.wall, roughness: 0.75 });
-    const inner = std(0xf4f1ea, { roughness: 0.9 });
+    const wallMat = pbr('WoodSiding008', { repeat: [W / 2.2, 1.3], tint: T.wall, normalScale: 1.2 }) ?? new THREE.MeshStandardMaterial({ map: clad, color: T.wall, roughness: 0.75 });
+    const inner = pbr('Plaster001', { repeat: [2, 1], tint: 0xf1ede4 }) ?? std(0xf4f1ea, { roughness: 0.9 });
     const t = 0.25;
     const wallMats = [wallMat, inner, wallMat, wallMat, wallMat, inner];
     // Murs : fond, côté extérieur, côté porte (avec porte de service), qui montent rangée par rangée.
@@ -280,23 +308,30 @@ export function createStands(scene, interactables, state) {
     // Terrasse : dallage, tables, parasols, guirlande lumineuse (visible une fois terminé).
     const terrace = new THREE.Group();
     const tt = conc.clone(); tt.needsUpdate = true; tt.wrapS = tt.wrapT = THREE.RepeatWrapping; tt.repeat.set(5, 3);
-    const pave = new THREE.Mesh(new THREE.PlaneGeometry(W + 2, 6.4), new THREE.MeshStandardMaterial({ map: tt, color: 0xe8e2d6, roughness: 0.9 }));
+    const paveMat = pbr('PavingStones136', { repeat: [(W + 2) / 2.4, 6.4 / 2.4] });
+    const pave = new THREE.Mesh(new THREE.PlaneGeometry(W + 2, 6.4), paveMat ? breakTiling(paveMat, { variation: 0.1 }) : new THREE.MeshStandardMaterial({ map: tt, color: 0xe8e2d6, roughness: 0.9 }));
     pave.rotation.x = -Math.PI / 2; pave.position.set(cx, 0.018, S.z1 + 3.2); pave.receiveShadow = true;
     terrace.add(pave);
     const wood = std(0x9b7a4a, { roughness: 0.8 });
+    const tableTop = pbr('WoodFloor051', { repeat: [0.5, 0.5], tint: 0xd8c8b0 }) ?? wood;
     const canvasMat = new THREE.MeshStandardMaterial({ map: stripeTexture(...T.stripe), roughness: 0.85, side: THREE.DoubleSide });
     for (const tb of S.tables) {
       const table = new THREE.Group();
-      const topM = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.05, 24), wood); topM.position.y = 0.74;
-      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.06, 0.74, 10), postMat); leg.position.y = 0.37;
-      table.add(topM, leg);
+      // Table de bistrot : plateau en bois sur pied fonte, chaises de terrasse tournées vers la table.
+      const topM = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 0.04, 32), tableTop); topM.position.y = 0.74;
+      const rim = new THREE.Mesh(new THREE.TorusGeometry(0.5, 0.012, 6, 40).rotateX(Math.PI / 2), postMat); rim.position.y = 0.74;
+      const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.72, 10), postMat); leg.position.y = 0.37;
+      const foot = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.26, 0.05, 20), postMat); foot.position.y = 0.025;
+      table.add(topM, rim, leg, foot);
       for (const [sx, sz] of [[0.85, 0], [-0.85, 0], [0, 0.85], [0, -0.85]]) {
+        const chair = modelAtHeight('plastic_monobloc_chair_01', 0.82);
+        if (chair) { chair.position.set(sx, 0, sz); chair.rotation.y = Math.atan2(-sx, -sz); table.add(chair); continue; }
         const stool = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.18, 0.45, 12), wood);
         stool.position.set(sx, 0.225, sz);
         table.add(stool);
       }
       const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 2.4, 8), postMat); pole.position.y = 1.2;
-      const shade = new THREE.Mesh(new THREE.ConeGeometry(1.25, 0.45, 16, 1, true), canvasMat); shade.position.y = 2.3;
+      const shade = new THREE.Mesh(parasolGeo ??= parasolGeometry(), canvasMat); shade.position.y = 2.08;
       table.add(pole, shade);
       table.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
       table.position.set(tb.x, 0, tb.z);
@@ -306,12 +341,20 @@ export function createStands(scene, interactables, state) {
     const bulbs = new THREE.MeshStandardMaterial({ color: 0xfff2c4, emissive: 0xffd27a, emissiveIntensity: 0.2 });
     const mastX = [S.x0 - 0.8, S.x1 + 0.8];
     for (const x of mastX) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3.2, 8), postMat); m.position.set(x, 1.6, S.z1 + 5.7); m.castShadow = true; terrace.add(m); }
+    const wirePts = [];
     for (let i = 0; i <= 16; i++) {
       const u = i / 16, x = mastX[0] + (mastX[1] - mastX[0]) * u;
-      const b = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), bulbs);
-      b.position.set(x, 3.05 - Math.sin(u * Math.PI) * 0.6, S.z1 + 5.7);
-      terrace.add(b);
+      const y = 3.05 - Math.sin(u * Math.PI) * 0.6;
+      wirePts.push(new THREE.Vector3(x, y + 0.06, S.z1 + 5.7));
+      if (i === 0 || i === 16) continue;
+      const b = new THREE.Mesh(bulbGeo ??= new THREE.SphereGeometry(0.035, 10, 8).scale(1, 1.25, 1), bulbs);
+      b.position.set(x, y, S.z1 + 5.7);
+      const sock = new THREE.Mesh(sockGeo ??= new THREE.CylinderGeometry(0.014, 0.014, 0.04, 8), postMat);
+      sock.position.set(x, y + 0.045, S.z1 + 5.7);
+      terrace.add(b, sock);
     }
+    const wire = new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(wirePts), 48, 0.006, 4), postMat);
+    terrace.add(wire);
     v.bulbs = bulbs;
     terrace.visible = false;
     root.add(terrace);
