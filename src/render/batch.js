@@ -41,6 +41,7 @@ export function mergeStatic(root, keep = () => false) {
     const mesh = new THREE.Mesh(concat(parts), mat);
     mesh.castShadow = cast; mesh.receiveShadow = receive;
     mesh.matrixAutoUpdate = false;
+    mesh.userData.merged = true;
     root.add(mesh);
   }
   return remove.length;

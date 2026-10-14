@@ -7,6 +7,7 @@ import { fmtMoney } from '../core/util.js';
 import { canvasTexture } from './textures.js';
 import { ZONE_LABEL } from '../game/data.js';
 import { L } from '../core/i18n.js';
+import { mergeStatic } from './batch.js';
 
 export const LEVEL_Y = [0.16, 0.72, 1.28];     // hauteur du dessus de chaque tablette
 const W = 2.1, D = 0.6;
@@ -175,6 +176,7 @@ export function createShelves(scene, interactables, state) {
       L.key = key;
       drawTag(L.tag, lvl.product, price, lvl.qty);
       // Reconstruit les articles visibles.
+      for (const c of L.items.children) if (c.userData.merged) c.geometry.dispose();
       L.items.clear();
       if (!lvl.product) return;
       const isRacket = !!PRODUCTS[lvl.product].racket;
@@ -191,6 +193,8 @@ export function createShelves(scene, interactables, state) {
         } else m.position.set(x, 0, z);
         L.items.add(m);
       }
+      // Les articles d'une tablette ne bougent pas : fusionnés en quelques maillages (une raquette compte ~10 pièces).
+      mergeStatic(L.items);
     });
   }
 

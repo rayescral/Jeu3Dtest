@@ -15,6 +15,7 @@ import { createBuilding } from './render/building.js';
 import { createShelves } from './render/shelves.js';
 import { createCourts } from './render/courts.js';
 import { createPersonView, setViewer } from './render/people.js';
+import { liteScene } from './render/lite.js';
 import { boxMesh } from './render/products.js';
 import { createInput } from './core/input.js';
 import { Player } from './core/player.js';
@@ -46,12 +47,24 @@ addEventListener('unhandledrejection', e => showError(e.reason?.message ?? e.rea
 const SAVE_KEY = 'tennis-club-sim-save-v1';
 
 // --- Rendu ---------------------------------------------------------------------------------------
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+// Carte graphique, lue avant de créer le rendu (l'anticrénelage se choisit à la création). Les puces intégrées
+// (Intel, Radeon intégrées, mobiles) démarrent en mode économie.
+const GPU_NAME = (() => {
+  try {
+    const c = document.createElement('canvas'), gl = c.getContext('webgl2') || c.getContext('webgl');
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return name;
+  } catch { return ''; }
+})();
+const weakGPU = /intel|swiftshader|llvmpipe|softpipe|software|basic render|mali|adreno|powervr|radeon\(tm\) graphics|radeon graphics|vega \d+ graphics/i.test(GPU_NAME) && !/\barc\b/i.test(GPU_NAME);
 // Qualité graphique : « ultra » (pleine définition, ombres fines), « haute » par défaut, « économie » pour les
-// ordinateurs modestes. Sans choix du joueur, le jeu passe seul en économie si l'image est trop saccadée.
+// ordinateurs modestes (matériaux simplifiés, sans ombres ni anticrénelage).
 const QUALITIES = ['high', 'ultra', 'low'];
-let quality = 'high', qualityChosen = false;
+let quality = weakGPU ? 'low' : 'high', qualityChosen = false;
 try { const q = localStorage.getItem('tennis-club-quality'); if (QUALITIES.includes(q)) { quality = q; qualityChosen = true; } } catch { /* stockage indisponible */ }
+const renderer = new THREE.WebGLRenderer({ antialias: quality !== 'low', powerPreference: 'high-performance' });
 // Résolution dynamique : si l'image ralentit, le jeu baisse un peu sa définition interne (et la remonte quand
 // tout redevient fluide). Ainsi il s'adapte à chaque ordinateur sans que le joueur ait à régler quoi que ce soit.
 let resScale = 1;
@@ -559,9 +572,13 @@ const qBtn = $('btn-quality');
 const qLabel = () => { qBtn.textContent = { ultra: L('Graphismes : ultra', 'Graphics: ultra'), high: L('Graphismes : haute qualité', 'Graphics: high quality'), low: L('Graphismes : mode économie', 'Graphics: power saving') }[quality]; };
 qLabel();
 qBtn.addEventListener('click', () => {
+  const before = quality;
   quality = QUALITIES[(QUALITIES.indexOf(quality) + 1) % QUALITIES.length];
   qualityChosen = true;
   try { localStorage.setItem('tennis-club-quality', quality); } catch { /* rien */ }
+  // Entrer dans le mode économie ou en sortir change les matériaux et l'anticrénelage : la partie est
+  // sauvegardée et la page rechargée.
+  if ((before === 'low') !== (quality === 'low')) { if (club && mode !== 'menu') save(); location.reload(); return; }
   applyQuality(); fps.good = 0; applyPerfLevel(0); qLabel();
 });
 // --- Boucle -----------------------------------------------------------------------------------------------
@@ -571,6 +588,7 @@ let menuT = 0, birdT = 4, stepPhase = 0, lastW = 0, lastH = 0;
 // Adaptation automatique à l'ordinateur : si l'image ralentit (moins de 38 images/s), on allège par paliers
 // — ombres moins souvent recalculées, puis sans ombres, puis définition un peu réduite — et on revient en arrière
 // quand tout est fluide. En « ultra », rien n'est touché.
+let liteFill = null;
 const fps = { t: 0, n: 0, frame: 0, rate: 60, good: 0, level: 0, js: 0, draw: 0 };
 const LEVELS_PERF = [
   { shadowEvery: 2, shadows: true, scale: 1 },
@@ -619,6 +637,9 @@ function tick() {
   adaptResolution(realDt);
   if (!renderer.shadowMap.autoUpdate && fps.frame++ % LEVELS_PERF[fps.level].shadowEvery === 0) renderer.shadowMap.needsUpdate = true;
   setViewer(camera.position);
+  if (quality === 'low' && fps.frame % 20 === 0) liteScene(scene);
+  // Mode économie : les matériaux simplifiés ne reçoivent pas la lumière du ciel ; une lumière d'ambiance la remplace.
+  if (quality === 'low' && !liteFill) { liteFill = new THREE.HemisphereLight(0xe6eef6, 0xc4c0b8, 1.3); scene.add(liteFill); }
   // Si la fenêtre a changé de taille sans prévenir (passage en plein écran), on réajuste l'image.
   if (lastW !== innerWidth || lastH !== innerHeight) { lastW = innerWidth; lastH = innerHeight; fit(); }
   if (mode === 'menu') {
@@ -645,6 +666,7 @@ function tick() {
     building.animateCounter(dt);
     player.animateHeld(dt);
     const { night } = env.setTime(club.s.minute, player.pos);
+    if (liteFill) liteFill.intensity = 1.3 - night * 1.05;
     building.update(club.s.minute, night);
     stands.update(dt, night);
     courts.setNight(night > 0.35 && club.s.upgrades.lights);
