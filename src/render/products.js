@@ -26,15 +26,23 @@ function build(product) {
   switch (product) {
     case 'balls':
     case 'padelballs': {
-      const lbl = productLabel(product);
-      const body = new THREE.Mesh(shared.tube ??= new THREE.CylinderGeometry(0.038, 0.038, 0.24, 20, 1, true),
-        new THREE.MeshStandardMaterial({ map: lbl, roughness: 0.3, side: THREE.DoubleSide }));
-      body.position.y = 0.12;
-      const cap = new THREE.Mesh(shared.tubeCap ??= new THREE.CylinderGeometry(0.041, 0.041, 0.025, 20), shared.white ??= std(0xf5f5f2, { roughness: 0.4 }));
+      // Tube en plastique transparent, trois balles feutrées visibles, étiquette en bas, bouchon.
+      const tube = new THREE.Mesh(shared.tubeClear ??= new THREE.CylinderGeometry(0.038, 0.038, 0.24, 24, 1, true),
+        shared.pet ??= shine(new THREE.MeshStandardMaterial({ color: 0xe8f2f6, roughness: 0.05, metalness: 0, transparent: true, opacity: 0.28, depthWrite: false, side: THREE.DoubleSide })));
+      tube.position.y = 0.12;
+      const label = new THREE.Mesh(shared.tubeLabel ??= new THREE.CylinderGeometry(0.0385, 0.0385, 0.07, 24, 1, true), new THREE.MeshStandardMaterial({ map: productLabel(product), roughness: 0.35 }));
+      label.position.y = 0.045;
+      const ballMat = product === 'balls' ? (shared.ballMat ??= new THREE.MeshStandardMaterial({ map: ballTexture('#cfe617'), roughness: 0.95 })) : (shared.pballMat ??= new THREE.MeshStandardMaterial({ map: ballTexture('#b8e830'), roughness: 0.95 }));
+      for (let k = 0; k < 3; k++) {
+        const ball = new THREE.Mesh(shared.ballGeo ??= new THREE.SphereGeometry(0.0335, 18, 14), ballMat);
+        ball.position.y = 0.04 + k * 0.069; ball.rotation.set(k, k * 2, 0);
+        g.add(ball);
+      }
+      const cap = new THREE.Mesh(shared.tubeCap ??= new THREE.CylinderGeometry(0.041, 0.041, 0.022, 24), product === 'balls' ? (shared.capY ??= std(0xf5f5f2, { roughness: 0.4 })) : (shared.capG ??= std(0x1f6b4a, { roughness: 0.4 })));
       cap.position.y = 0.245;
-      const bottom = new THREE.Mesh(shared.tubeBottom ??= new THREE.CylinderGeometry(0.039, 0.039, 0.01, 20), shared.metal ??= shine(std(0xb8bcc2, { metalness: 0.8, roughness: 0.3 })));
+      const bottom = new THREE.Mesh(shared.tubeBottom ??= new THREE.CylinderGeometry(0.039, 0.039, 0.01, 24), shared.metal ??= shine(std(0xb8bcc2, { metalness: 0.8, roughness: 0.3 })));
       bottom.position.y = 0.005;
-      g.add(body, cap, bottom);
+      g.add(tube, label, cap, bottom);
       break;
     }
     case 'water': {
@@ -221,56 +229,186 @@ function productLabelGrip() {
   })();
 }
 
-// Raquette : cadre ovale, cœur, manche et cordage. Debout, tête vers le haut.
-// color : couleur de la marque ; key : modèle (pour partager les matériaux).
+// Raquette de tennis fidèle : profil de cadre extrudé (tête ovale, cœur ouvert, pont), cordage en grille,
+// manche octogonal avec grip enroulé et bouchon. Pala de padel : tête pleine percée, décor imprimé.
+// Debout, tête vers le haut, manche en bas (y = 0). Longueur réelle : 68,6 cm (tennis), 46 cm (padel).
+const BRAND_NAMES = { racket: 'VOLTA', racketHexa: 'HEXA', racketAero: 'AERION', racketTitan: 'TITAN', racketJunior: 'STRATA', padelracket: 'KRAKEN', padelPro: 'VIBRA' };
+function ovalPoints(cx, cy, rx, ry, n, flatBottom = 0) {
+  const pts = [];
+  for (let i = 0; i < n; i++) {
+    const a = (i / n) * Math.PI * 2;
+    // Super-ellipse : tête un peu plus « carrée » qu'une ellipse, comme les tamis modernes.
+    const c = Math.cos(a), sn = Math.sin(a);
+    let x = Math.sign(c) * Math.pow(Math.abs(c), 0.86) * rx, y = Math.sign(sn) * Math.pow(Math.abs(sn), 0.92) * ry;
+    if (flatBottom && y < -ry + flatBottom) y = -ry + flatBottom;
+    pts.push(new THREE.Vector2(cx + x, cy + y));
+  }
+  return pts;
+}
+function tennisFrameGeometry() {
+  return shared.tennisFrame ??= (() => {
+    const cy = 0.505, rx = 0.132, ry = 0.168, th = 0.0085;
+    // Contour extérieur : tête puis gorge qui se resserre jusqu'au manche.
+    const outer = new THREE.Shape();
+    const head = ovalPoints(0, cy, rx, ry, 72);
+    const start = head.findIndex(p => p.y < cy - ry * 0.55 && p.x > 0);
+    // On parcourt la tête du côté droit bas, par le haut, jusqu'au côté gauche bas, puis on descend la gorge.
+    const ring = [];
+    for (let k = 0; k < head.length; k++) ring.push(head[(start + k) % head.length]);
+    const keep = ring.filter(p => !(p.y < cy - ry * 0.55));
+    outer.moveTo(0.015, 0.18);
+    outer.bezierCurveTo(0.03, 0.25, 0.085, 0.29, keep[0].x + 0.001, keep[0].y - 0.006);
+    for (const p of keep) outer.lineTo(p.x, p.y);
+    const last = keep[keep.length - 1];
+    outer.bezierCurveTo(-0.085, 0.29, -0.03, 0.25, -0.015, 0.18);
+    outer.lineTo(0.015, 0.18);
+    // Ouverture du tamis (fond aplati par le pont).
+    const hole = new THREE.Path(ovalPoints(0, cy, rx - th, ry - th, 64, 0.03).reverse());
+    // Cœur ouvert entre le pont et la gorge.
+    const heart = new THREE.Path();
+    // Bras de la gorge incurvés vers l'extérieur, pont fin.
+    const yb = cy - ry + 0.03 - 0.01;
+    heart.moveTo(0, 0.228); heart.bezierCurveTo(0.012, 0.26, 0.062, 0.29, 0.082, yb);
+    heart.lineTo(-0.082, yb); heart.bezierCurveTo(-0.062, 0.29, -0.012, 0.26, 0, 0.228);
+    outer.holes.push(hole, heart);
+    const g = new THREE.ExtrudeGeometry(outer, { depth: 0.017, bevelEnabled: true, bevelThickness: 0.0035, bevelSize: 0.0028, bevelSegments: 2, curveSegments: 6 });
+    g.translate(0, 0, -0.0085);
+    g.computeVertexNormals();
+    return g;
+  })();
+}
+function gripTexture() {
+  return shared.gripTex ??= (() => {
+    const c = document.createElement('canvas'); c.width = 64; c.height = 256;
+    const x = c.getContext('2d');
+    x.fillStyle = '#1c1d1f'; x.fillRect(0, 0, 64, 256);
+    // Bande de surgrip enroulée en spirale.
+    for (let y = -64; y < 320; y += 22) {
+      x.fillStyle = 'rgba(255,255,255,0.08)'; x.beginPath(); x.moveTo(0, y); x.lineTo(64, y + 16); x.lineTo(64, y + 20); x.lineTo(0, y + 4); x.fill();
+      x.fillStyle = 'rgba(0,0,0,0.5)'; x.beginPath(); x.moveTo(0, y + 18); x.lineTo(64, y + 34); x.lineTo(64, y + 36); x.lineTo(0, y + 20); x.fill();
+    }
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  })();
+}
+function decalTexture(text, bg, fg) {
+  const key = 'decal' + text + bg + fg;
+  return shared[key] ??= (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 48;
+    const x = c.getContext('2d');
+    x.fillStyle = bg; x.fillRect(0, 0, 256, 48);
+    x.fillStyle = fg; x.font = 'italic 800 34px Outfit, Arial'; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillText(text, 128, 26);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
+}
+
 export function racketMesh(padel = false, color = null, key = null) {
   const g = new THREE.Group();
-  const accent = color != null ? (shared['acc' + color] ??= new THREE.MeshStandardMaterial({ color, roughness: 0.3 })) : null;
+  const brand = BRAND_NAMES[key] ?? (padel ? 'KRAKEN' : 'VOLTA');
+  const paint = color != null ? (shared['paint' + color] ??= new THREE.MeshStandardMaterial({ color, roughness: 0.28, metalness: 0.35 })) : (shared.paintDefault ??= new THREE.MeshStandardMaterial({ color: 0x2f6fe0, roughness: 0.28, metalness: 0.35 }));
+  const black = shared.carbon ??= new THREE.MeshStandardMaterial({ color: 0x141518, roughness: 0.35, metalness: 0.4 });
+  const gripMat = shared.gripMat2 ??= new THREE.MeshStandardMaterial({ map: gripTexture(), roughness: 0.9 });
   if (padel) {
-    const shape = new THREE.Shape();
-    shape.absellipse(0, 0, 0.13, 0.15, 0, Math.PI * 2);
-    const holes = [];
-    for (let i = -2; i <= 2; i++) for (let j = -2; j <= 2; j++) {
-      if (i * i + j * j > 6) continue;
-      const h = new THREE.Path(); h.absarc(i * 0.045, j * 0.05, 0.009, 0, Math.PI * 2, true); holes.push(h);
-    }
-    shape.holes = holes;
-    const head = new THREE.Mesh(shared.padelHead ??= new THREE.ExtrudeGeometry(shape, { depth: 0.035, bevelEnabled: true, bevelSize: 0.008, bevelThickness: 0.008, bevelSegments: 3, curveSegments: 24 }),
-      shared.padelMat ??= new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.3 }));
-    head.position.set(0, 0.36, -0.017);
-    const stripe = new THREE.Mesh(shared.padelStripe ??= new THREE.TorusGeometry(0.14, 0.008, 8, 40), key === 'padelracket' || !accent ? (shared.lime ??= std(0xc8f04a, { roughness: 0.4 })) : accent);
-    stripe.scale.set(0.93, 1.07, 1); stripe.position.set(0, 0.36, 0.0);
-    const handle = new THREE.Mesh(shared.padelHandle ??= new THREE.CylinderGeometry(0.017, 0.019, 0.16, 12), shared.gripMat ??= std(0x222222, { roughness: 0.9 }));
-    handle.position.y = 0.11;
-    g.add(head, stripe, handle);
+    // Tête en goutte d'eau, percée, avec cadre protecteur et décor sur les deux faces.
+    const shapeKey = 'padelGeo';
+    const geo = shared[shapeKey] ??= (() => {
+      const sh = new THREE.Shape();
+      const pts = [];
+      for (let i = 0; i <= 48; i++) {
+        const a = Math.PI * 1.5 + (i / 48) * Math.PI * 2;
+        const r = 0.13, y = Math.sin(a), x = Math.cos(a);
+        pts.push(new THREE.Vector2(x * r * (y < 0 ? 0.88 + y * 0.12 : 1), 0.31 + y * 0.15 * (y < 0 ? 1.25 : 1)));
+      }
+      sh.setFromPoints(pts);
+      for (let i = -3; i <= 3; i++) for (let j = -3; j <= 3; j++) {
+        const hx = i * 0.033 + (j % 2 ? 0.0165 : 0), hy = 0.33 + j * 0.03;
+        if (Math.hypot(hx / 0.1, (hy - 0.33) / 0.11) > 1) continue;
+        const h = new THREE.Path(); h.absarc(hx, hy, 0.0065, 0, Math.PI * 2, true); sh.holes.push(h);
+      }
+      const eg = new THREE.ExtrudeGeometry(sh, { depth: 0.032, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 2, curveSegments: 24 });
+      eg.translate(0, 0, -0.016);
+      // UV des faces : décor centré sur la tête.
+      const pos = eg.attributes.position, uv = eg.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + 0.14) / 0.28, (pos.getY(i) - 0.11) / 0.38);
+      return eg;
+    })();
+    const face = shared['padelFace' + brand + color] ??= new THREE.MeshStandardMaterial({ map: padelFaceTexture(brand, color ?? 0x7a4fd6), roughness: 0.4, metalness: 0.15 });
+    const head = new THREE.Mesh(geo, [face, black]);
+    g.add(head);
+    const rim = new THREE.Mesh(shared.padelRim ??= new THREE.TorusGeometry(0.135, 0.006, 6, 48).scale(1, 1.18, 1.5).translate(0, 0.315, 0), black);
+    g.add(rim);
+    const handle = new THREE.Mesh(shared.padelHandle2 ??= new THREE.CylinderGeometry(0.016, 0.018, 0.15, 8).translate(0, 0.075, 0), gripMat);
+    const cap = new THREE.Mesh(shared.padelCap ??= new THREE.CylinderGeometry(0.02, 0.02, 0.012, 12), black);
+    const strap = new THREE.Mesh(shared.strap ??= new THREE.TorusGeometry(0.03, 0.003, 4, 16).translate(0, -0.03, 0), black);
+    g.add(handle, cap, strap);
   } else {
-    const frameMat = accent ?? (shared.frameMat ??= new THREE.MeshStandardMaterial({ color: 0x2f6fe0, roughness: 0.3 }));
-    const frame = new THREE.Mesh(shared.frame ??= new THREE.TorusGeometry(0.13, 0.011, 10, 48), frameMat);
-    frame.scale.set(0.8, 1.05, 1); frame.position.y = 0.47;
-    const strings = new THREE.Mesh(shared.strings ??= new THREE.CircleGeometry(0.128, 32), shared.stringMat ??= new THREE.MeshStandardMaterial({
-      map: stringTexture(), transparent: true, side: THREE.DoubleSide, roughness: 0.6, depthWrite: false,
-    }));
-    strings.scale.set(0.8, 1.05, 1); strings.position.y = 0.47;
-    const throatGeo = shared.throat ??= new THREE.CylinderGeometry(0.008, 0.01, 0.17, 8);
-    for (const s of [-1, 1]) {
-      const t = new THREE.Mesh(throatGeo, frameMat);
-      t.position.set(s * 0.035, 0.27, 0); t.rotation.z = s * 0.28;
-      g.add(t);
-    }
-    const handle = new THREE.Mesh(shared.handle ??= new THREE.CylinderGeometry(0.016, 0.018, 0.2, 8), shared.gripMat ??= std(0x222222, { roughness: 0.9 }));
-    handle.position.y = 0.1;
-    g.add(frame, strings, handle);
+    const frame = new THREE.Mesh(tennisFrameGeometry(), paint);
+    g.add(frame);
+    // Bande noire sur le haut du tamis (protection) et sur la gorge.
+    const bumper = new THREE.Mesh(shared.bumper ??= new THREE.TorusGeometry(0.135, 0.0055, 6, 40, Math.PI * 0.55).rotateZ(Math.PI * 0.225).scale(1, 1.24, 1.9).translate(0, 0.505, 0), black);
+    g.add(bumper);
+    // Cordage : grille 16 x 19 dans l'ouverture du tamis.
+    const strings = new THREE.Mesh(shared.stringBed ??= (() => {
+      const sh = new THREE.Shape(ovalPoints(0, 0.505, 0.121, 0.157, 64, 0.03));
+      const sg = new THREE.ShapeGeometry(sh, 24);
+      const pos = sg.attributes.position, uv = sg.attributes.uv;
+      for (let i = 0; i < uv.count; i++) uv.setXY(i, (pos.getX(i) + 0.121) / 0.242 * 16, (pos.getY(i) - 0.348) / 0.314 * 19);
+      return sg;
+    })(), shared.stringMat2 ??= new THREE.MeshStandardMaterial({ map: stringTexture(), transparent: false, alphaTest: 0.4, side: THREE.DoubleSide, roughness: 0.6, color: 0xf2f0e6 }));
+    g.add(strings);
+    // Logo de la marque sur le cordage (pochoir), et décor sur la gorge.
+    const logo = new THREE.Mesh(shared.logoPlane ??= new THREE.PlaneGeometry(0.11, 0.02), new THREE.MeshStandardMaterial({ map: decalTexture(brand, 'rgba(0,0,0,0)', '#' + new THREE.Color(color ?? 0x2f6fe0).getHexString()), transparent: true, depthWrite: false }));
+    logo.position.set(0, 0.505, 0.002);
+    g.add(logo);
+    // Manche octogonal avec grip, bouchon.
+    const shaft = new THREE.Mesh(shared.shaft ??= new THREE.CylinderGeometry(0.0125, 0.0135, 0.05, 8).translate(0, 0.205, 0), paint);
+    const handle = new THREE.Mesh(shared.handle2 ??= new THREE.CylinderGeometry(0.0145, 0.0155, 0.19, 8).translate(0, 0.095, 0), gripMat);
+    const cap = new THREE.Mesh(shared.buttCap ??= new THREE.CylinderGeometry(0.0172, 0.0165, 0.014, 8).translate(0, 0.004, 0), black);
+    g.add(shaft, handle, cap);
   }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
 
-function stringTexture() {
-  const c = document.createElement('canvas'); c.width = c.height = 128;
+function padelFaceTexture(brand, color) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 320;
   const x = c.getContext('2d');
-  x.strokeStyle = 'rgba(245,245,235,0.9)'; x.lineWidth = 1.4;
-  for (let i = 4; i < 128; i += 8) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 128); x.moveTo(0, i); x.lineTo(128, i); x.stroke(); }
+  const col = '#' + new THREE.Color(color).getHexString();
+  x.fillStyle = '#15171a'; x.fillRect(0, 0, 256, 320);
+  // Motif graphique : vague de la couleur de la marque, effet carbone.
+  for (let i = 0; i < 320; i += 4) { x.fillStyle = i % 8 ? '#191b1f' : '#121316'; x.fillRect(0, i, 256, 2); }
+  x.fillStyle = col; x.beginPath(); x.moveTo(0, 210); x.bezierCurveTo(80, 150, 170, 300, 256, 170); x.lineTo(256, 320); x.lineTo(0, 320); x.fill();
+  x.fillStyle = 'rgba(255,255,255,0.85)'; x.beginPath(); x.moveTo(0, 225); x.bezierCurveTo(80, 165, 170, 315, 256, 185); x.lineTo(256, 192); x.bezierCurveTo(170, 322, 80, 172, 0, 232); x.fill();
+  x.fillStyle = '#ffffff'; x.font = 'italic 800 40px Outfit, Arial'; x.textAlign = 'center';
+  x.fillText(brand, 128, 70);
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+}
+
+function stringTexture() {
+  return shared.stringTex ??= (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d');
+    x.clearRect(0, 0, 64, 64);
+    x.fillStyle = 'rgba(245,243,232,1)';
+    x.fillRect(30, 0, 5, 64); x.fillRect(0, 30, 64, 5);
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.RepeatWrapping; return t;
+  })();
+}
+
+// Balle de tennis : feutre jaune fluo, couture blanche en double courbe.
+export function ballTexture(color) {
+  const key = 'ballTex' + color;
+  return shared[key] ??= (() => {
+    const c = document.createElement('canvas'); c.width = 256; c.height = 128;
+    const x = c.getContext('2d');
+    x.fillStyle = color; x.fillRect(0, 0, 256, 128);
+    for (let i = 0; i < 5000; i++) { x.fillStyle = Math.random() < 0.5 ? 'rgba(255,255,255,0.08)' : 'rgba(80,90,0,0.08)'; x.fillRect(Math.random() * 256, Math.random() * 128, 1.5, 1.5); }
+    x.strokeStyle = 'rgba(250,250,240,0.95)'; x.lineWidth = 5;
+    x.beginPath();
+    for (let u = 0; u <= 256; u += 2) { const v = 64 + Math.sin(u / 256 * Math.PI * 4) * 30; u ? x.lineTo(u, v) : x.moveTo(u, v); }
+    x.stroke();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t;
+  })();
 }
 
 function roundedBox(w, h, d, r) {

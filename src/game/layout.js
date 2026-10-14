@@ -27,7 +27,7 @@ export const DELIVERY = { x: 6.2, z: 17.6 };           // palette de livraison, 
 
 // Mobilier du club-house (le rendu et les collisions utilisent les mêmes positions).
 export const PLANTS = [{ x: -9.3, z: 13.3 }, { x: 9.3, z: 13.3 }, { x: -1.9, z: 0.6 }, { x: 1.9, z: 0.6 }];
-export const LOBBY_BENCH = { x: 3.4, z: 13.5, w: 3.6, d: 0.42 };
+export const LOBBY_BENCH = { x: 3.4, z: 13.45, w: 3.6, d: 0.8 };   // canapé et fauteuil du salon
 
 // Étagères de la boutique : 4 contre le mur de droite, 2 contre le mur du fond.
 // facing : direction vers laquelle l'étagère est tournée (angle autour de y, 0 = vers +z).

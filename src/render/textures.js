@@ -148,11 +148,21 @@ function drawTennisLines(g, W, H, areaW, areaL, color) {
 }
 
 export const clayTexture = () => memo('clay', () => canvasTexture(1024, 2048, (g, w, h) => {
-  g.fillStyle = '#c4643a'; g.fillRect(0, 0, w, h);
-  noiseLayer(g, w, h, { scale: 160, alpha: 0.1, seed: 21 });
-  noiseLayer(g, w, h, { scale: 22, alpha: 0.07, seed: 23 });
-  speckle(g, w, h, 40000, ['rgba(120,45,20,0.35)', 'rgba(230,140,90,0.3)'], [1, 2]);
-  drawTennisLines(g, w, h, 18.3, 36.6, 'rgba(250,246,238,0.95)');
+  // Brique pilée : orange chaud, zones plus sèches (claires) et plus tassées (foncées), grain fin.
+  g.fillStyle = '#bd5a2c'; g.fillRect(0, 0, w, h);
+  noiseLayer(g, w, h, { scale: 220, alpha: 0.12, seed: 21, color: '90,30,10' });
+  noiseLayer(g, w, h, { scale: 40, alpha: 0.06, seed: 23, color: '90,30,10' });
+  // Usure claire au fond de court et autour des lignes de service, là où l'on joue le plus.
+  const px = w / 18.3;
+  for (const s of [-1, 1]) {
+    const grd = g.createRadialGradient(w / 2, h / 2 + s * 12.4 * px, 10, w / 2, h / 2 + s * 12.4 * px, 6 * px);
+    grd.addColorStop(0, 'rgba(226,150,100,0.35)'); grd.addColorStop(1, 'rgba(226,150,100,0)');
+    g.fillStyle = grd; g.fillRect(0, 0, w, h);
+  }
+  speckle(g, w, h, 60000, ['rgba(110,40,15,0.35)', 'rgba(235,150,100,0.3)', 'rgba(250,210,180,0.18)'], [1, 2.2]);
+  drawTennisLines(g, w, h, 18.3, 36.6, 'rgba(246,240,228,0.92)');
+  // Lignes légèrement recouvertes de terre par endroits.
+  speckle(g, w, h, 9000, ['rgba(189,90,44,0.55)'], [1, 3]);
 }));
 
 export const hardTexture = () => memo('hard', () => canvasTexture(1024, 2048, (g, w, h) => {

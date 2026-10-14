@@ -5,9 +5,36 @@ import { COURT_SLOTS, TENNIS_AREA, PADEL_AREA } from '../game/layout.js';
 import { COURTS, COURT_TYPES } from '../game/data.js';
 import { clayTexture, hardTexture, padelTexture, wearTexture, meshTexture, gravelTexture, canvasTexture } from './textures.js';
 import { clamp, rand, fmtMoney0 } from '../core/util.js';
+import { pbr, images, assets, modelAtHeight } from './assets.js';
+
+// Détail photographique ajouté à une surface dessinée (relief et rugosité répétés finement).
+function detail(mat, name, repeat, normalScale = 1) {
+  const src = pbr(name, { repeat });
+  if (!src) return mat;
+  mat.normalMap = src.normalMap; mat.normalScale.set(normalScale, normalScale);
+  mat.roughnessMap = src.roughnessMap;
+  return mat;
+}
+const fenceCache = {};
+// Grillage à maille losange (photo, transparent), teinté vert foncé comme sur les vrais courts.
+function chainLink(len, h) {
+  const key = `${len.toFixed(2)}x${h.toFixed(2)}`;
+  if (!fenceCache[key]) {
+    const m = pbr('Fence003', { repeat: [len / 0.5, h / 0.5], tint: 0x3d5c44, side: THREE.DoubleSide, alphaTest: 0.35 });
+    // Maille fine : couverture alpha (anticrénelage) pour qu'elle reste légère et transparente de loin.
+    if (m) { m.alphaToCoverage = true; m.metalness = 0.6; }
+    fenceCache[key] = m ?? new THREE.MeshStandardMaterial({ map: (() => { const t = meshTexture('fence', 'rgba(40,60,50,0.9)', 16, 2).clone(); t.needsUpdate = true; t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(len * 6, h * 6); return t; })(), alphaTest: 0.3, side: THREE.DoubleSide });
+  }
+  return fenceCache[key];
+}
+let windMat = null;
+// Bâche brise-vent (toile tissée vert sapin).
+function windscreen() {
+  return windMat ??= (pbr('Fabric030', { repeat: [6, 1], tint: 0x1d4a35, side: THREE.DoubleSide }) ?? new THREE.MeshStandardMaterial({ color: 0x1d4a35, roughness: 0.9, side: THREE.DoubleSide }));
+}
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o });
-const steel = std(0x1f3a2c, { metalness: 0.5, roughness: 0.45 });
+const steel = std(0x1f3a2c, { metalness: 0.6, roughness: 0.4 });
 const black = std(0x15181b, { metalness: 0.5, roughness: 0.4 });
 const white = std(0xf4f4f0, { roughness: 0.5 });
 
@@ -22,29 +49,41 @@ function mesh(geo, mat, x = 0, y = 0, z = 0, cast = true) {
 function fencePanel(len, h, bottom = 2) {
   const g = new THREE.Group();
   if (bottom > 0) {
-    const wind = new THREE.Mesh(new THREE.PlaneGeometry(len, bottom), std(0x1d4a35, { roughness: 0.9, side: THREE.DoubleSide }));
-    wind.position.y = bottom / 2;
-    wind.castShadow = true;
+    const wind = new THREE.Mesh(new THREE.PlaneGeometry(len, bottom), windscreen());
+    wind.position.y = bottom / 2 + 0.05;
+    wind.castShadow = true; wind.receiveShadow = true;
     g.add(wind);
   }
-  const tex = meshTexture('fence', 'rgba(40,60,50,0.9)', 16, 2).clone();
-  tex.needsUpdate = true;
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-  tex.repeat.set(len * 6, (h - bottom) * 6);
-  const net = new THREE.Mesh(new THREE.PlaneGeometry(len, h - bottom), new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.3, side: THREE.DoubleSide, roughness: 0.6 }));
-  net.position.y = bottom + (h - bottom) / 2;
+  // Le grillage monte jusqu'en haut, derrière la bâche.
+  const net = new THREE.Mesh(new THREE.PlaneGeometry(len, h), chainLink(len, h));
+  net.position.y = h / 2;
+  net.position.z = -0.02;
+  net.castShadow = true;
   g.add(net);
+  // Lisses horizontales en haut et à mi-hauteur.
+  for (const y of [h - 0.02, bottom]) {
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, len, 8).rotateZ(Math.PI / 2), steel);
+    rail.position.y = y;
+    g.add(rail);
+  }
   return g;
 }
 
+const galva = std(0x8f969b, { metalness: 0.8, roughness: 0.35 });
 function floodlight(x, z, rot) {
   const g = new THREE.Group();
-  g.add(mesh(new THREE.CylinderGeometry(0.09, 0.12, 8, 10), black, 0, 4, 0));
-  const head = mesh(new THREE.BoxGeometry(0.9, 0.25, 0.45), black, 0, 8.1, 0.2);
-  head.rotation.x = 0.5;
-  const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 0.38), new THREE.MeshBasicMaterial({ color: 0x3a3d40, side: THREE.DoubleSide }));
-  lens.position.set(0, 8.0, 0.44);
-  lens.rotation.x = -1.07;
+  // Mât galvanisé conique, crosse et projecteur LED à ailettes.
+  g.add(mesh(new THREE.CylinderGeometry(0.07, 0.13, 8.2, 12), galva, 0, 4.1, 0));
+  g.add(mesh(new THREE.BoxGeometry(0.08, 0.08, 0.6), galva, 0, 8.15, 0.25));
+  const head = new THREE.Group();
+  head.position.set(0, 8.05, 0.55);
+  head.rotation.x = 0.55;
+  head.add(mesh(new THREE.BoxGeometry(0.85, 0.08, 0.5), black, 0, 0.04, 0));
+  for (let i = -3; i <= 3; i++) head.add(mesh(new THREE.BoxGeometry(0.02, 0.07, 0.48), black, i * 0.12, 0.11, 0));
+  g.add(head);
+  const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.78, 0.44), new THREE.MeshBasicMaterial({ color: 0x3a3d40, side: THREE.DoubleSide }));
+  lens.position.set(0, 7.98, 0.6);
+  lens.rotation.x = -1.02;
   // Halo visible la nuit.
   const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: 0xfff1d0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   glow.scale.set(3.2, 3.2, 1);
@@ -55,6 +94,15 @@ function floodlight(x, z, rot) {
   g.position.set(x, 0, z);
   g.rotation.y = rot;
   return { g, lens };
+}
+
+let weldTex = null;
+function weldedMesh() {
+  return weldTex ??= canvasTexture(128, 128, (g, w, h) => {
+    g.clearRect(0, 0, w, h);
+    g.fillStyle = '#ffffff';
+    for (let i = 0; i < 4; i++) { g.fillRect(i * 32, 0, 3, h); g.fillRect(0, i * 32, w, 3); }
+  });
 }
 
 let glowTex = null;
@@ -77,11 +125,42 @@ function signTexture(lines, color) {
   });
 }
 
+// Chaise d'arbitre : piétement en acier laqué blanc, échelle, assise avec dossier et accoudoirs.
+function umpireChair(x, z) {
+  const c = new THREE.Group();
+  const tube = (ax, ay, az, bx, by, bz, r = 0.025) => {
+    const a = new THREE.Vector3(ax, ay, az), b = new THREE.Vector3(bx, by, bz);
+    const len = a.distanceTo(b);
+    const m = mesh(new THREE.CylinderGeometry(r, r, len, 10), white);
+    m.position.copy(a).add(b).multiplyScalar(0.5);
+    m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+    c.add(m);
+  };
+  for (const sz of [-1, 1]) {
+    tube(-0.45, 0, sz * 0.42, -0.25, 1.75, sz * 0.3);
+    tube(0.45, 0, sz * 0.42, 0.25, 1.75, sz * 0.3);
+    for (const y of [0.45, 0.9, 1.35]) tube(-0.42 + y * 0.1, y, sz * (0.4 - y * 0.06), 0.42 - y * 0.1, y, sz * (0.4 - y * 0.06), 0.018);
+  }
+  // Échelle côté court.
+  for (const y of [0.35, 0.75, 1.15, 1.55]) tube(0.42 - y * 0.1, y, -0.3, 0.42 - y * 0.1, y, 0.3, 0.02);
+  const seatMat = std(0x1f6b4a, { roughness: 0.55 });
+  c.add(mesh(new THREE.BoxGeometry(0.62, 0.06, 0.66), seatMat, 0, 1.8, 0));
+  c.add(mesh(new THREE.BoxGeometry(0.06, 0.55, 0.66), seatMat, -0.3, 2.1, 0));
+  for (const sz of [-1, 1]) c.add(mesh(new THREE.BoxGeometry(0.5, 0.04, 0.05), white, 0, 2.05, sz * 0.31));
+  c.add(mesh(new THREE.BoxGeometry(0.35, 0.03, 0.66), white, 0.35, 1.05, 0));
+  c.position.set(x, 0, z);
+  return c;
+}
+
 function buildTennis(def) {
   const g = new THREE.Group();
   const A = TENNIS_AREA;
   const surfTex = def.surface === 'clay' ? clayTexture() : hardTexture();
-  const surface = mesh(new THREE.PlaneGeometry(A.w, A.l), new THREE.MeshStandardMaterial({ map: surfTex, roughness: def.surface === 'clay' ? 0.95 : 0.7 }), 0, 0.03, 0, false);
+  surfTex.anisotropy = 8;
+  const surfMat = new THREE.MeshStandardMaterial({ map: surfTex, roughness: def.surface === 'clay' ? 1 : 0.75 });
+  if (def.surface === 'clay') detail(surfMat, 'Ground088', [24, 48], 0.55);
+  else detail(surfMat, 'Concrete034', [30, 60], 0.25);
+  const surface = mesh(new THREE.PlaneGeometry(A.w, A.l), surfMat, 0, 0.03, 0, false);
   surface.rotation.x = -Math.PI / 2;
   surface.userData.interact = { kind: 'court', court: def.id };
   g.add(surface);
@@ -117,17 +196,20 @@ function buildTennis(def) {
   g.add(mesh(new THREE.BoxGeometry(1.8, 0.06, 0.06), steel, 0, 2.3, z1));
 
   // Chaise d'arbitre, bancs, numéro du court.
-  const chair = new THREE.Group();
-  for (const [x, z] of [[-0.3, -0.3], [0.3, -0.3], [-0.3, 0.3], [0.3, 0.3]]) chair.add(mesh(new THREE.CylinderGeometry(0.025, 0.025, 1.8), white, x, 0.9, z));
-  chair.add(mesh(new THREE.BoxGeometry(0.7, 0.06, 0.7), white, 0, 1.8, 0));
-  chair.add(mesh(new THREE.BoxGeometry(0.05, 0.5, 0.7), white, -0.33, 2.08, 0));
-  chair.position.set(-7.4, 0, 0);
-  g.add(chair);
+  g.add(umpireChair(-7.4, 0));
+  // Chaises des joueurs de part et d'autre de la chaise d'arbitre.
   const wood = std(0xa07a52, { roughness: 0.6 });
   for (const z of [-2.2, 2.2]) {
-    g.add(mesh(new THREE.BoxGeometry(0.42, 0.05, 1.6), wood, -7.9, 0.46, z));
-    g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, -7.9, 0.22, z - 0.7));
-    g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, -7.9, 0.22, z + 0.7));
+    const chairs = [-0.45, 0.45].map(dz => {
+      const c = modelAtHeight('plastic_monobloc_chair_01', 0.82);
+      if (c) { c.position.set(-7.9, 0, z + dz); c.rotation.y = Math.PI / 2; g.add(c); }
+      return c;
+    });
+    if (!chairs[0]) {
+      g.add(mesh(new THREE.BoxGeometry(0.42, 0.05, 1.6), wood, -7.9, 0.46, z));
+      g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, -7.9, 0.22, z - 0.7));
+      g.add(mesh(new THREE.BoxGeometry(0.06, 0.44, 0.06), black, -7.9, 0.22, z + 0.7));
+    }
   }
   const num = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 0.7), new THREE.MeshStandardMaterial({ map: signTexture([def.label.toUpperCase()], def.surface === 'clay' ? '#d9673a' : '#2f5d9e') }));
   num.position.set(2.2, 2.6, z1 + 0.05);
@@ -144,7 +226,9 @@ function buildPadel(def) {
   const base = mesh(new THREE.PlaneGeometry(PADEL_AREA.w, PADEL_AREA.l), std(0x9a9a94, { roughness: 0.9 }), 0, 0.025, 0, false);
   base.rotation.x = -Math.PI / 2;
   g.add(base);
-  const surface = mesh(new THREE.PlaneGeometry(10, 20), new THREE.MeshStandardMaterial({ map: padelTexture(), roughness: 0.9 }), 0, 0.032, 0, false);
+  const padelMat = new THREE.MeshStandardMaterial({ map: padelTexture(), roughness: 0.9 });
+  detail(padelMat, 'Grass001', [20, 40], 0.7);
+  const surface = mesh(new THREE.PlaneGeometry(10, 20), padelMat, 0, 0.032, 0, false);
   surface.rotation.x = -Math.PI / 2;
   surface.userData.interact = { kind: 'court', court: def.id };
   g.add(surface);
@@ -156,9 +240,10 @@ function buildPadel(def) {
   glass.userData.reflective = true;
   const pane = (w, h, x, y, z, ry) => { const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), glass); m.position.set(x, y, z); m.rotation.y = ry; g.add(m); };
   const meshPanel = (w, h, x, y, z, ry) => {
-    const tex = meshTexture('padelmesh', 'rgba(20,20,20,0.9)', 12, 2).clone();
-    tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(w * 6, h * 6);
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.3, side: THREE.DoubleSide }));
+    // Treillis soudé : mailles carrées de 5 cm, fils noirs.
+    const tex = weldedMesh().clone();
+    tex.needsUpdate = true; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.repeat.set(w / 0.2, h / 0.2);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(w, h), new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.35, alphaToCoverage: true, side: THREE.DoubleSide, color: 0x222426, metalness: 0.5, roughness: 0.5 }));
     m.position.set(x, y, z); m.rotation.y = ry; g.add(m);
   };
   // Fonds : 3 m de verre + 1 m de grillage.

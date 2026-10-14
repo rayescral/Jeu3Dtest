@@ -8,6 +8,7 @@ import {
   STANDS, standColliders, parkingColliders, carCollider, PARKING_SPOTS, RESERVED_SPOTS,
 } from './game/layout.js';
 import { createStands } from './render/stands.js';
+import { loadAssets } from './render/assets.js';
 import { createTraffic } from './render/traffic.js';
 import { createEnvironment } from './render/environment.js';
 import { createBuilding } from './render/building.js';
@@ -48,7 +49,7 @@ function applyQuality() {
   scene?.traverse(o => { if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.needsUpdate = true; }); });
   fit?.();
 }
-renderer.shadowMap.type = THREE.PCFShadowMap;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.0;
 $('game').appendChild(renderer.domElement);
@@ -64,8 +65,8 @@ addEventListener('resize', fit);
 applyQuality();
 
 const interactables = [];
-const env = createEnvironment(scene, renderer);
-const building = createBuilding(scene, interactables);
+// Créés une fois les ressources graphiques chargées (voir le démarrage, en bas du fichier).
+let env = null, building = null, traffic = null;
 const audio = createAudio();
 const hud = createHud();
 const input = createInput(renderer.domElement);
@@ -74,7 +75,6 @@ player.yaw = 0;
 
 // --- État de la partie (créé au lancement) --------------------------------------------------------------
 let club = null, shelves = null, courts = null, computer = null, payment = null, stands = null;
-const traffic = createTraffic(scene);
 let colliders = staticColliders();
 const personViews = new Map();
 const boxViews = new Map();
@@ -568,8 +568,16 @@ function tick() {
   }
   renderer.render(scene, camera);
 }
-renderer.setAnimationLoop(tick);
-$('loading').hidden = true;
+// Démarrage : ressources graphiques (textures photographiques, ciels, modèles 3D), puis la scène.
+(async () => {
+  const bar = $('loading-bar');
+  await loadAssets(p => { if (bar) bar.style.width = `${Math.round(p * 100)}%`; });
+  env = createEnvironment(scene, renderer);
+  building = createBuilding(scene, interactables);
+  traffic = createTraffic(scene);
+  renderer.setAnimationLoop(tick);
+  $('loading').hidden = true;
+})();
 
 // Accès pour les tests automatisés et la console.
 window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld };

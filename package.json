@@ -3,15 +3,23 @@
   "private": true,
   "description": "Jeu de gestion de club de tennis et de padel en 3D, à la première personne.",
   "scripts": {
-    "build": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --outfile=jeu.js",
+    "build": "npm run dev",
     "start": "python3 -m http.server 8000",
     "test": "node tests/simulation.test.mjs && node tests/paths.test.mjs",
-    "app": "npm run build && node tools/package-app.mjs",
-    "itch": "npm run build && node tools/package-itch.mjs"
+    "app": "node tools/package-app.mjs",
+    "itch": "node tools/package-itch.mjs",
+    "dev": "esbuild src/main.js --bundle --format=iife --minify --target=es2020 --legal-comments=none --outfile=web/jeu.js",
+    "release": "npm run dev && cp web/index.html web/style.css . && cp web/jeu.js jeu.js",
+    "assets": "python3 tools/assets/fetch.py && node tools/assets/build.mjs"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.1.0",
+    "@gltf-transform/extensions": "^4.1.0",
+    "@gltf-transform/functions": "^4.1.0",
     "@neutralinojs/neu": "^11.7.2",
     "esbuild": "0.24.0",
+    "meshoptimizer": "^0.21.0",
+    "sharp": "^0.33.5",
     "three": "^0.170.0"
   }
 }

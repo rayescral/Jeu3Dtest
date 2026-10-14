@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { CLUB, DOOR_W, COUNTER, LAPTOP, REGISTER, TERMINAL, COUNTER_MAT, SIGN, PLANTS, LOBBY_BENCH } from '../game/layout.js';
 import { woodFloorTexture, wallTexture, cladTexture, canvasTexture } from './textures.js';
 import { productMesh } from './products.js';
+import { pbr, modelAtHeight, breakTiling } from './assets.js';
 import { fmtMoney, fmtClock } from '../core/util.js';
 
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.6, ...o });
@@ -34,13 +35,17 @@ export function createBuilding(scene, interactables) {
   const cx = (CLUB.minX + CLUB.maxX) / 2, cz = (CLUB.minZ + CLUB.maxZ) / 2;
 
   // --- Sol, murs, toit ----------------------------------------------------------------------------
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), new THREE.MeshStandardMaterial({ map: woodFloorTexture(), roughness: 0.45 }));
+  // Parquet photographique (lames de chêne), légèrement verni.
+  const floorMat = breakTiling(pbr('WoodFloor051', { repeat: [W / 2.4, D / 2.4], roughness: 0.75 }), { variation: 0.08, scale: 0.5, warm: [1.03, 1.0, 0.97] })
+    ?? new THREE.MeshStandardMaterial({ map: woodFloorTexture(), roughness: 0.45 });
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(W, D), floorMat);
   floor.rotation.x = -Math.PI / 2; floor.position.set(cx, 0.025, cz);
   floor.receiveShadow = true;
   group.add(floor);
 
-  const paint = new THREE.MeshStandardMaterial({ map: wallTexture(), roughness: 0.9 });
-  const clad = new THREE.MeshStandardMaterial({ map: cladTexture(), roughness: 0.75 });
+  // Murs intérieurs en enduit peint, façades extérieures en bardage bois.
+  const paint = pbr('Plaster001', { repeat: [5, 1.6], tint: 0xf1ede4, normalScale: 0.5 }) ?? new THREE.MeshStandardMaterial({ map: wallTexture(), roughness: 0.9 });
+  const clad = pbr('WoodSiding008', { repeat: [5, 1.6] }) ?? new THREE.MeshStandardMaterial({ map: cladTexture(), roughness: 0.75 });
   const t = 0.25, half = DOOR_W / 2;
   // Matériaux par face : +x, -x, +y, -y, +z, -z.
   const wallMats = (outside) => ['+x', '-x', '+y', '-y', '+z', '-z'].map(f => (f === outside ? clad : paint));
@@ -106,7 +111,7 @@ export function createBuilding(scene, interactables) {
   group.add(box(4.8, 0.85, 0.1, roofMat, 0, H + 0.95, CLUB.maxZ + 1.54));
 
   // Plafond avec dalles lumineuses.
-  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(W, D), std(0xf4f2ee, { roughness: 0.95 }));
+  const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(W, D), pbr('OfficeCeiling001', { repeat: [W / 1.2, D / 1.2], side: THREE.DoubleSide }) ?? std(0xf4f2ee, { roughness: 0.95 }));
   ceiling.rotation.x = Math.PI / 2; ceiling.position.set(cx, H - 0.01, cz);
   group.add(ceiling);
   const panelMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xfff6e8, emissiveIntensity: 1.2 });
@@ -279,12 +284,34 @@ export function createBuilding(scene, interactables) {
   const potMat = std(0x2b2f33, { roughness: 0.5 });
   const leafMat = std(0x3f7a34, { roughness: 0.8 });
   const leafGeo = new THREE.IcosahedronGeometry(0.42, 2);
-  for (const { x, z } of PLANTS) {
+  PLANTS.forEach(({ x, z }, i) => {
+    const plant = modelAtHeight(i % 2 ? 'potted_plant_02' : 'potted_plant_01', i < 2 ? 1.5 : 1.2);
+    if (plant) { plant.position.set(x, 0, z); plant.rotation.y = i * 1.7; group.add(plant); return; }
     group.add(box(0.5, 0.55, 0.5, potMat, x, 0.275, z));
     const leaf = new THREE.Mesh(leafGeo, leafMat);
     leaf.position.set(x, 0.95, z); leaf.scale.set(1, 1.3, 1);
     leaf.castShadow = true;
     group.add(leaf);
+  });
+  // Suspensions au-dessus du comptoir, caméra de surveillance, plantes grasses sur le comptoir.
+  for (const lx of [-7.6, -5.6, -3.6]) {
+    const lamp = modelAtHeight('modern_ceiling_lamp_01', 1.0);
+    if (lamp) { lamp.position.set(lx, H - 1.0, 6.2); group.add(lamp); }
+  }
+  const cam = modelAtHeight('security_camera_01', 0.3);
+  if (cam) { cam.position.set(CLUB.maxX - 0.35, H - 0.45, CLUB.minZ + 0.35); cam.rotation.y = -2.4; group.add(cam); }
+  const succulent = modelAtHeight('potted_plant_04', 0.3);
+  if (succulent) { succulent.position.set(-8.25, COUNTER.top, 7.05); group.add(succulent); }
+  // Extérieur : climatiseurs à l'arrière, coffret électrique, appliques murales.
+  for (const ax of [-7, 6.5]) {
+    const ac = modelAtHeight('exterior_aircon_unit', 0.8);
+    if (ac) { ac.position.set(ax, 0, CLUB.minZ - 0.5); ac.rotation.y = Math.PI; group.add(ac); }
+  }
+  const ub = modelAtHeight('utility_box_01', 1.3);
+  if (ub) { ub.position.set(CLUB.maxX + 0.35, 0, 2.2); ub.rotation.y = Math.PI / 2; group.add(ub); }
+  for (const [lx, lz, ry] of [[-6, CLUB.minZ - 0.15, Math.PI], [6, CLUB.minZ - 0.15, Math.PI], [CLUB.minX - 0.15, 10, -Math.PI / 2], [CLUB.maxX + 0.15, 10, Math.PI / 2]]) {
+    const wl = modelAtHeight('industrial_wall_lamp', 0.3);
+    if (wl) { wl.position.set(lx, 2.6, lz); wl.rotation.y = ry; group.add(wl); }
   }
   // Paillasson.
   group.add(box(2, 0.012, 1.2, std(0x3a3226, { roughness: 1 }), 0, 0.03, 13.2, { cast: false }));
@@ -292,8 +319,16 @@ export function createBuilding(scene, interactables) {
   const benchWood = std(0xa07a52, { roughness: 0.6 }), steel = std(0x30353a, { metalness: 0.6, roughness: 0.4 });
   {
     const b = LOBBY_BENCH;
-    group.add(box(b.w, 0.06, b.d, benchWood, b.x, 0.46, b.z));
-    for (const x of [b.x - b.w / 2 + 0.2, b.x + b.w / 2 - 0.2]) group.add(box(0.06, 0.44, 0.38, steel, x, 0.22, b.z));
+    const sofa = modelAtHeight('sofa_02', 0.85);
+    const chair = modelAtHeight('modern_arm_chair_01', 0.85);
+    if (sofa && chair) {
+      sofa.position.set(b.x - 0.55, 0, b.z); sofa.rotation.y = Math.PI;
+      chair.position.set(b.x + 1.35, 0, b.z); chair.rotation.y = Math.PI;
+      group.add(sofa, chair);
+    } else {
+      group.add(box(b.w, 0.06, b.d, benchWood, b.x, 0.46, b.z));
+      for (const x of [b.x - b.w / 2 + 0.2, b.x + b.w / 2 - 0.2]) group.add(box(0.06, 0.44, 0.38, steel, x, 0.22, b.z));
+    }
   }
 
   // --- Articles posés sur le comptoir --------------------------------------------------------------------
