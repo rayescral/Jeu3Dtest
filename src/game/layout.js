@@ -29,7 +29,7 @@ export const DELIVERY = { x: 6.2, z: 17.6 };           // palette de livraison, 
 export const PLANTS = [{ x: -9.3, z: 13.3 }, { x: 9.3, z: 13.3 }, { x: -1.9, z: 0.6 }, { x: 1.9, z: 0.6 }];
 export const LOBBY_BENCH = { x: 3.4, z: 13.45, w: 3.6, d: 0.8 };   // canapé et fauteuil du salon
 
-// Étagères de la boutique : 4 contre le mur de droite, 2 contre le mur du fond.
+// Étagères de la boutique : 4 contre le mur de droite, 2 contre le mur du fond, 2 contre le mur de gauche.
 // facing : direction vers laquelle l'étagère est tournée (angle autour de y, 0 = vers +z).
 const SHOP_SHELVES = [
   { x: 9.45, z: 3.1, facing: -Math.PI / 2 },
@@ -38,6 +38,9 @@ const SHOP_SHELVES = [
   { x: 9.45, z: 10.6, facing: -Math.PI / 2 },
   { x: 4.3, z: 0.45, facing: 0 },
   { x: 6.9, z: 0.45, facing: 0 },
+  // Mur de gauche, près de l'entrée (achetables plus tard).
+  { x: -9.45, z: 9.35, facing: Math.PI / 2 },
+  { x: -9.45, z: 11.75, facing: Math.PI / 2 },
 ].map(s => ({ ...s, zone: 'shop' }));
 
 // --- Buvette (à l'ouest du club-house) et snack (à l'est) -------------------------------------------

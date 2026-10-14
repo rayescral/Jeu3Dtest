@@ -261,7 +261,7 @@ export function createBuilding(scene, interactables) {
       g.font = '500 24px Outfit, Arial'; g.fillText(sub, 30, h - 40);
     });
     const poster = new THREE.Mesh(new THREE.PlaneGeometry(0.8, 1.12), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.6 }));
-    poster.position.set(CLUB.minX + 0.14, 2, 9 + i * 1.2);
+    poster.position.set(CLUB.minX + 0.14, 2, 2.2 + i * 1.2);   // derrière le comptoir (le mur près de l'entrée reçoit des étagères)
     poster.rotation.y = Math.PI / 2;
     group.add(poster);
   });

@@ -71,7 +71,22 @@ export const FACILITIES = {
 };
 
 // Aménagements achetables depuis l'ordinateur.
-export const SHELF_PRICE = 450;          // une étagère de boutique supplémentaire
+export const SHELF_PRICE = 450;          // une étagère de boutique supplémentaire (gondole)
+// Meubles de boutique, tous de la même emprise (2,1 m × 0,6 m). levels : nombre d'emplacements ;
+// cap : multiplicateur de la contenance de chaque emplacement ; only : articles acceptés (null = tous).
+const SMALL = ['balls', 'padelballs', 'grip', 'wristband', 'energy', 'strings'];
+export const SHELF_TYPES = {
+  gondola: { name: L('Gondole', 'Gondola'), desc: L('3 tablettes, tous les articles', '3 shelves, any item'), price: 450, levels: 3, cap: 1, level: 1, only: null },
+  bin: { name: L('Bacs à vrac', 'Dump bins'), desc: L('2 grands bacs pour balles, grips, poignets, barres et cordages : contenance ×2,5', '2 large bins for balls, grips, sweatbands, bars and strings: 2.5× capacity'), price: 380, levels: 2, cap: 2.5, level: 2, only: SMALL },
+  racketWall: { name: L('Mur à raquettes', 'Racket wall'), desc: L('Raquettes suspendues, manche en bas, sur 2 rangées : contenance ×2', 'Rackets hung handle down on 2 rows: 2× capacity'), price: 700, levels: 2, cap: 2, level: 3, only: 'racket' },
+  table: { name: L('Table de présentation', 'Display table'), desc: L('Textile, chaussures et sacs, sur une table et un plateau : contenance ×1,5', 'Apparel, shoes and bags on a table and a top tier: 1.5× capacity'), price: 520, levels: 2, cap: 1.5, level: 4, only: ['cap', 'towel', 'tshirt', 'bag', 'shoes'] },
+};
+export const shelfAccepts = (type, id) => {
+  const T = SHELF_TYPES[type] ?? SHELF_TYPES.gondola;
+  if (!T.only) return true;
+  return T.only === 'racket' ? !!PRODUCTS[id]?.racket : T.only.includes(id);
+};
+export const shelfCap = (type, id) => Math.max(1, Math.round(PRODUCTS[id].shelf * (SHELF_TYPES[type] ?? SHELF_TYPES.gondola).cap));
 export const SHELF_START = 2;            // étagères disponibles au départ
 export const UPGRADES = {
   lockers: { name: L('Vestiaires rénovés', 'Renovated locker rooms'), desc: L('+40 licenciés possibles et clients plus satisfaits', '+40 possible members and happier customers'), price: 3500, level: 3 },

@@ -3,6 +3,7 @@
 // Aucune dépendance au rendu : le rendu est prévenu par des "hooks". Testable sous Node.
 import {
   PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, STAFF, UPGRADES, FACILITIES, EVENTS, CHALLENGES, LEVELS, levelFor,
+  SHELF_TYPES, shelfAccepts, shelfCap,
   SHELF_PRICE, SHELF_START, OPEN_HOUR, CLOSE_HOUR, LATE_CLOSE_HOUR, START_MONEY, START_LICENCES, START_FAME,
 } from './data.js';
 import {
@@ -23,7 +24,7 @@ const OVERTIME_CHANCE = 0.28;            // part des parties qui dépassent leur
 const OVERTIME_MAX = 80;                 // au-delà, les joueurs finissent par partir d'eux-mêmes
 export const SHELF_LEVELS = 3;
 export const PALLET_SLOTS = 18;
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 const ZONE_STAT = { bar: 'bar', snack: 'snack' };
 
@@ -53,11 +54,14 @@ export function createState() {
 
 // Met à jour une sauvegarde d'une version précédente (ou complète un état neuf).
 export function migrateState(s) {
-  s.prices ??= {}; s.shelves ??= []; s.staff ??= {}; s.facilities ??= {}; s.upgrades ??= {}; s.boxes ??= []; s.orders ??= []; s.objectives ??= [];
+  s.prices ??= {}; s.shelves ??= [];
+  // Version 3 : deux emplacements de boutique ajoutés (index 6 et 7), avant ceux de la buvette et du snack.
+  if ((s.version ?? 1) < 3 && s.shelves.length === 10) s.shelves.splice(6, 0, undefined, undefined); s.staff ??= {}; s.facilities ??= {}; s.upgrades ??= {}; s.boxes ??= []; s.orders ??= []; s.objectives ??= [];
   for (const id of PRODUCT_IDS) s.prices[id] ??= round10(PRODUCTS[id].market);
   for (const id of Object.keys(SERVICES)) s.prices[id] ??= SERVICES[id].market;
   SHELF_SLOTS.forEach((slot, i) => {
     s.shelves[i] ??= {
+      type: 'gondola',
       built: slot.zone === 'shop' && i < SHELF_START,
       levels: Array.from({ length: SHELF_LEVELS }, () => ({ product: null, qty: 0 })),
     };
@@ -392,7 +396,7 @@ export class Club {
           break;
         }
         if (!this.arrived(L)) break;
-        for (const p of cust.persons) if (p !== L) this.goTo(p, [this.takeLobby(p)]);
+        for (const p of cust.persons) if (p !== L) this.goTo(p, this.shelfRoute(p, this.takeLobby(p)));
         if (cust.wants.length) this.nextWant(cust);
         else if (cust.kind === 'book') this.findCourt(cust);
         else this.joinQueue(cust);
@@ -485,12 +489,17 @@ export class Club {
       if (!shelf) { this.upset(cust, 0.15, T(`Plus de ${PRODUCTS[want].short.toLowerCase()} !`, `Out of ${PRODUCTS[want].short.toLowerCase()}!`)); continue; }
       cust.want = want; cust.shelf = shelf.index;
       const slot = SHELF_SLOTS[shelf.index];
-      this.goTo(L, [{ x: slot.browse.x + rand(-0.5, 0.5), z: slot.browse.z + rand(-0.15, 0.15) }]);
+      this.goTo(L, this.shelfRoute(L, { x: slot.browse.x + rand(-0.5, 0.5), z: slot.browse.z + rand(-0.15, 0.15) }));
       cust.shelfLook = { x: slot.x, z: slot.z };
       cust.state = 'toShelf';
       return;
     }
     this.afterShopping(cust);
+  }
+  // Trajet vers une étagère : les étagères du mur de gauche sont de l'autre côté du comptoir, on passe devant.
+  shelfRoute(from, to) {
+    const left = p => p.x < -2.5;
+    return left(from) !== left(to) ? [{ x: -1.6, z: 9.6 }, to] : [to];
   }
   findShelfWith(product, from) {
     let best = null;
@@ -554,7 +563,7 @@ export class Club {
   findCourt(cust) {
     if (this.reserveCourt(cust)) return this.joinQueue(cust);
     cust.state = 'waitCourt'; cust.timer = 1; cust.waitT = 0;
-    this.goTo(cust.leader, [this.takeLobby(cust.leader)]);
+    this.goTo(cust.leader, this.shelfRoute(cust.leader, this.takeLobby(cust.leader)));
     if (Math.random() < 0.6) this.say(cust.leader, T('On attend qu\'un terrain se libère', 'We\'re waiting for a court'), 'info');
   }
   releaseCourt(cust) {
@@ -976,15 +985,18 @@ export class Club {
     box.held = false; box.x = x; box.z = z; box.y = y;
     this.h.boxMoved(box);
   }
-  shelfLevelCap(product) { return PRODUCTS[product].shelf; }
+  shelfLevelCap(product, shelfIdx) { return shelfCap(this.s.shelves[shelfIdx]?.type ?? 'gondola', product); }
+  shelfType(i) { return SHELF_TYPES[this.s.shelves[i]?.type] ?? SHELF_TYPES.gondola; }
   // Range une unité du carton sur un niveau d'étagère (chaque article dans sa zone : boutique, buvette, snack).
   placeItem(box, shelfIdx, levelIdx) {
     const sh = this.s.shelves[shelfIdx];
     if (!sh?.built || box.qty <= 0) return 'none';
     if (SHELF_SLOTS[shelfIdx].zone !== PRODUCTS[box.product].zone) return 'zone';
+    if (SHELF_SLOTS[shelfIdx].zone === 'shop' && !shelfAccepts(sh.type ?? 'gondola', box.product)) return 'type';
+    if (levelIdx >= this.shelfType(shelfIdx).levels) return 'none';
     const lvl = sh.levels[levelIdx];
     if (lvl.product && lvl.product !== box.product && lvl.qty > 0) return 'other';
-    if (lvl.qty >= this.shelfLevelCap(box.product)) return 'full';
+    if (lvl.qty >= this.shelfLevelCap(box.product, shelfIdx)) return 'full';
     lvl.product = box.product; lvl.qty++; box.qty--;
     this.h.shelfChanged(shelfIdx);
     if (box.qty === 0) this.removeBox(box);
@@ -1023,11 +1035,26 @@ export class Club {
     this.h.notify(T(`${c.label} construit !`, `${c.label} built!`), 'good');
     return true;
   }
-  buyShelf() {
+  // Achète un meuble de boutique du type voulu, sur le premier emplacement libre.
+  buyShelf(type = 'gondola') {
+    const T = SHELF_TYPES[type];
     const i = this.s.shelves.findIndex((s, k) => !s.built && SHELF_SLOTS[k].zone === 'shop');
-    if (i < 0 || !this.spend(SHELF_PRICE, 'build')) return false;
-    this.s.shelves[i].built = true;
+    if (!T || i < 0 || !this.unlocked(T.level) || !this.spend(T.price, 'build')) return false;
+    const sh = this.s.shelves[i];
+    sh.built = true; sh.type = type;
+    sh.levels = Array.from({ length: SHELF_LEVELS }, () => ({ product: null, qty: 0 }));
     this.h.shelfBuilt(i);
+    return true;
+  }
+  // Démonte un meuble vide (moitié du prix remboursée) pour en installer un autre.
+  removeShelf(i) {
+    const sh = this.s.shelves[i];
+    if (!sh?.built || SHELF_SLOTS[i].zone !== 'shop' || sh.levels.some(l => l.qty > 0)) return false;
+    if (this.s.shelves.filter((x, k) => x.built && SHELF_SLOTS[k].zone === 'shop').length <= 1) return false;
+    sh.built = false;
+    for (const l of sh.levels) { l.product = null; l.qty = 0; }
+    this.earn(Math.round(this.shelfType(i).price / 2), 'bonus');
+    this.h.shelfRemoved?.(i);
     return true;
   }
   buyUpgrade(key) {

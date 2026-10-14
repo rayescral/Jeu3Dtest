@@ -43,8 +43,10 @@ checkPath('accueil', [STAFF_SPOT, STAFF_SPOT]);
 const starts = [FRONT_IN, ...LOBBY, ...SHOP.map(s => s.browse)];
 for (const from of starts) for (const q of QUEUE) checkPath(`vers la file depuis (${from.x}, ${from.z})`, [from, ...club.queuePath(from, q)]);
 // D'une étagère à l'autre, et vers le salon.
-for (const a of SHOP) for (const b of SHOP) checkPath(`étagère ${a.id} → ${b.id}`, [a.browse, b.browse]);
-for (const a of SHOP) for (const l of LOBBY) checkPath(`étagère ${a.id} → salon`, [a.browse, l]);
+for (const a of SHOP) for (const b of SHOP) checkPath(`étagère ${a.id} → ${b.id}`, [a.browse, ...club.shelfRoute(a.browse, b.browse)]);
+for (const b of SHOP) checkPath(`entrée → étagère ${b.id}`, [FRONT_IN, ...club.shelfRoute(FRONT_IN, b.browse)]);
+for (const l of LOBBY) for (const b of SHOP) checkPath(`salon → étagère ${b.id}`, [l, ...club.shelfRoute(l, b.browse)]);
+for (const a of SHOP) for (const l of LOBBY) checkPath(`étagère ${a.id} → salon`, [a.browse, ...club.shelfRoute(a.browse, l)]);
 for (const l of LOBBY) checkPath('salon → sortie', [l, ...club.pathOut(l)]);
 // Chaque terrain, chaque place, aller et retour.
 for (const c of COURTS) {

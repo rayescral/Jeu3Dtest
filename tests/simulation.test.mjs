@@ -2,7 +2,7 @@
 // ne reste bloqué, que l'argent et le stock restent cohérents, et qu'aucune erreur n'est levée.
 // Lancer : node tests/simulation.test.mjs
 import { Club, createState, SHELF_LEVELS } from '../src/game/club.js';
-import { PRODUCTS, COURTS } from '../src/game/data.js';
+import { PRODUCTS, COURTS, shelfCap } from '../src/game/data.js';
 import { round10 } from '../src/core/util.js';
 
 let failures = 0;
@@ -58,6 +58,9 @@ function robot(serveCounter) {
   for (const id of Object.keys(state.courts)) if (state.courts[id].wear > 0.5) club.clean(id);
   // Investissements.
   if (state.shelves.filter(s => s.built).length < 4 && state.money > 1500) club.buyShelf();
+  // Autres meubles : bacs à vrac puis mur à raquettes (testent les contenances et les articles acceptés).
+  if (state.shelves.filter(s => s.built).length === 4 && state.money > 1800) club.buyShelf('bin');
+  if (state.shelves.filter(s => s.built).length === 5 && state.money > 2500 && club.unlocked(3)) club.buyShelf('racketWall');
   for (const c of COURTS) if (!state.courts[c.id].built && club.unlocked(c.level) && state.money > c.price + 1500) club.buildCourt(c.id);
   for (const f of ['buvette', 'parking', 'snack']) if (club.unlocked([2, 2, 3][['buvette', 'parking', 'snack'].indexOf(f)]) && !state.facilities[f].built && !state.facilities[f].building && state.money > 3000) club.buyFacility(f);
   if (state.day >= 4 && club.canHire('security') && !state.staff.security) club.setStaff('security', true);
@@ -73,7 +76,7 @@ function invariants(tag) {
   for (const [id, rt] of Object.entries(club.court)) {
     if (rt.reservedBy != null) check(club.customers.some(c => c.id === rt.reservedBy), `${tag} : ${id} réservé par un client disparu`);
   }
-  for (const s of state.shelves) for (const l of s.levels) check(l.qty >= 0 && (!l.product || l.qty <= PRODUCTS[l.product].shelf), `${tag} : étagère incohérente`);
+  for (const s of state.shelves) for (const l of s.levels) check(l.qty >= 0 && (!l.product || l.qty <= shelfCap(s.type ?? 'gondola', l.product)), `${tag} : étagère incohérente`);
   for (const [k, st] of Object.entries(club.stand)) check(st.queue.every(q => club.customers.includes(q)), `${tag} : file de ${k} contient un client disparu`);
   check(club.cars.every(c => c.state === 'leaving' || club.customers.includes(c.cust)), `${tag} : voiture sans client`);
   check(new Set(club.cars.map(c => c.spot)).size === club.cars.length, `${tag} : deux voitures sur la même place`);

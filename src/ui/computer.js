@@ -1,5 +1,5 @@
 // L'ordinateur de l'accueil ("ClubOS") : commandes, prix, terrains, aménagements, personnel, bilan.
-import { PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, UPGRADES, STAFF, SHELF_PRICE, LEVELS, FACILITIES, EVENTS, ZONE_LABEL } from '../game/data.js';
+import { PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, UPGRADES, STAFF, LEVELS, FACILITIES, EVENTS, ZONE_LABEL, SHELF_TYPES } from '../game/data.js';
 import { challengeText } from '../game/club.js';
 import { SHELF_SLOTS } from '../game/layout.js';
 import { fmtMoney, fmtMoney0, round10, clamp } from '../core/util.js';
@@ -116,9 +116,20 @@ export function createComputer(club, { onClose, onEndDay, sound }) {
       else action = `<button class="primary" data-act="facility" data-id="${k}" ${club.s.money < F.price ? 'disabled' : ''}>${L('Construire', 'Build')} · ${fmtMoney0(F.price)}</button>`;
       return `<article class="row-card"><div><h4>${F.name}</h4><p class="muted">${F.desc}</p>${f.building ? `<div class="progress-bar"><i style="width:${(f.progress * 100).toFixed(0)}%"></i></div>` : ''}</div>${action}</article>`;
     }).join('');
-    return `<h3>${L('Boutique', 'Shop')}</h3>
-      <article class="row-card"><div><h4>${L('Étagères', 'Shelves')}</h4><p class="muted">${L(`${built} sur ${total} installées`, `${built} of ${total} installed`)}</p></div>
-        ${built < total ? `<button class="primary" data-act="shelf" ${club.s.money < SHELF_PRICE ? 'disabled' : ''}>${L('Ajouter', 'Add')} · ${fmtMoney0(SHELF_PRICE)}</button>` : `<span class="pill good">${L('Complet', 'Complete')}</span>`}</article>
+    // Meubles de boutique : un bouton d'achat par type, puis la liste des meubles installés (démontables à vide).
+    const free = built < total;
+    const types = Object.entries(SHELF_TYPES).map(([k, T]) => {
+      const locked = club.s.level < T.level;
+      return `<article class="row-card"><div><h4>${T.name}</h4><p class="muted">${T.desc}</p></div>
+        ${locked ? `<span class="lock">${L('Niveau', 'Level')} ${T.level}</span>` : `<button class="primary" data-act="shelf" data-id="${k}" ${!free || club.s.money < T.price ? 'disabled' : ''}>${L('Installer', 'Install')} · ${fmtMoney0(T.price)}</button>`}</article>`;
+    }).join('');
+    const installed = club.s.shelves.map((sh, i) => ({ sh, i })).filter(({ sh, i }) => sh.built && SHELF_SLOTS[i].zone === 'shop').map(({ sh, i }, n) => {
+      const T = SHELF_TYPES[sh.type ?? 'gondola'], empty = sh.levels.every(l => l.qty === 0);
+      const content = sh.levels.slice(0, T.levels).filter(l => l.product && l.qty > 0).map(l => `${PRODUCTS[l.product].short} ×${l.qty}`).join(', ') || L('vide', 'empty');
+      return `<div class="cart-line"><span>${n + 1}. ${T.name} · <span class="muted">${content}</span></span>${empty && built > 1 ? `<button class="ghost small" data-act="unshelf" data-id="${i}">${L('Démonter', 'Dismantle')} (+${fmtMoney0(T.price / 2)})</button>` : ''}</div>`;
+    }).join('');
+    return `<h3>${L('Boutique', 'Shop')} · ${L(`${built} meubles sur ${total} emplacements`, `${built} units on ${total} spots`)}</h3>
+      ${types}<article class="row-card"><div style="flex:1">${installed}</div></article>
       <h3>${L('Constructions', 'Buildings')}</h3>${facilities}<h3>${L('Aménagements', 'Upgrades')}</h3>${ups}<h3>${L('Personnel', 'Staff')}</h3>${staff}`;
   }
 
@@ -186,7 +197,8 @@ export function createComputer(club, { onClose, onEndDay, sound }) {
     }
     if (act === 'p-' || act === 'p+') club.setPrice(key, round10(club.s.prices[key] + (act === 'p+' ? 0.1 : -0.1) * (e.shiftKey ? 10 : 1)));
     if (act === 'build') { if (club.buildCourt(id)) sound.build(); else sound.error(); }
-    if (act === 'shelf') { if (!club.buyShelf()) sound.error(); else sound.build(); }
+    if (act === 'shelf') { if (!club.buyShelf(id)) sound.error(); else sound.build(); }
+    if (act === 'unshelf') { if (!club.removeShelf(+id)) sound.error(); }
     if (act === 'upgrade') { if (!club.buyUpgrade(id)) sound.error(); else sound.build(); }
     if (act === 'facility') { if (!club.buyFacility(id)) sound.error(); }
     if (act === 'staff') club.setStaff(id, !club.s.staff[id]);

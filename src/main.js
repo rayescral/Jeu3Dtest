@@ -2,7 +2,7 @@
 // le joueur (core/) et l'interface (ui/).
 import * as THREE from 'three';
 import { Club, createState, SAVE_VERSION } from './game/club.js';
-import { PRODUCTS, COURTS, COURT_TYPES, EVENTS } from './game/data.js';
+import { PRODUCTS, COURTS, COURT_TYPES, EVENTS, shelfAccepts } from './game/data.js';
 import {
   staticColliders, shelfCollider, courtColliders, SHELF_SLOTS, WORLD, LAPTOP, COURT_SLOTS,
   STANDS, standColliders, parkingColliders, carCollider, PARKING_SPOTS, RESERVED_SPOTS,
@@ -191,7 +191,8 @@ const hooks = {
   },
   bubble(p, text, kind) { personViews.get(p.id)?.say(text, kind); },
   shelfChanged(i) { shelves?.refresh(i); },
-  shelfBuilt(i, quiet) { shelves?.refresh(i); rebuildColliders(); if (!quiet) hud.notify(L('Nouvelle étagère installée', 'New shelf installed'), 'good'); },
+  shelfRemoved(i) { shelves?.refresh(i); rebuildColliders(); hud.notify(L('Meuble démonté (moitié du prix remboursée)', 'Unit dismantled (half the price refunded)'), 'info'); },
+    shelfBuilt(i, quiet) { shelves?.refresh(i); rebuildColliders(); if (!quiet) hud.notify(L('Nouvelle étagère installée', 'New shelf installed'), 'good'); },
   counterChanged(c) { building.showCounter(c); hud.checkout(c); },
   boxAdded(box) { addBoxView(box); },
   boxRemoved(box) { removeBoxView(box); },
@@ -406,6 +407,7 @@ input.onClick = (button, phase) => {
       else if (r === 'other') { hud.notify(L('Un autre produit est déjà rangé ici', 'Another product is already stocked here'), 'bad'); audio.error(); }
       else if (r === 'none') { hud.notify(L('Achète d\'abord cette étagère sur l\'ordinateur', 'Buy this shelf on the computer first'), 'bad'); audio.error(); }
       else if (r === 'zone') { hud.notify(zoneMessage(held.product), 'bad'); audio.error(); }
+      else if (r === 'type') { hud.notify(L(`Ce meuble n'accepte pas cet article (${club.shelfType(t.shelf).name})`, `This unit doesn't take this item (${club.shelfType(t.shelf).name})`), 'bad'); audio.error(); }
     } else if (t.kind === 'scan' && !t.done) club.scan(t.uid);
     else if (t.kind === 'card' && club.counter.phase === 'pay' && club.counter.method === 'card') openUi('card');
     else if (t.kind === 'cash' && club.counter.phase === 'pay' && club.counter.method === 'cash') openUi('cash');
@@ -501,9 +503,10 @@ function updateTarget(dt) {
   if (t) {
     if (t.kind === 'shelf') {
       const lvl = club.s.shelves[t.shelf].levels[t.level];
-      const name = lvl.product ? `${PRODUCTS[lvl.product].short} · ${lvl.qty} / ${PRODUCTS[lvl.product].shelf}` : L('Emplacement libre', 'Empty slot');
+      const name = lvl.product ? `${PRODUCTS[lvl.product].short} · ${lvl.qty} / ${club.shelfLevelCap(lvl.product, t.shelf)}` : L('Emplacement libre', 'Empty slot');
       if (held) {
         if (SHELF_SLOTS[t.shelf].zone !== PRODUCTS[held.product].zone) hint = `${name}<br><span class="warn">${zoneMessage(held.product)}</span>`;
+        else if (SHELF_SLOTS[t.shelf].zone === 'shop' && !shelfAccepts(club.s.shelves[t.shelf].type ?? 'gondola', held.product)) hint = `${name}<br><span class="warn">${L('Ce meuble n\'accepte pas cet article', 'This unit doesn\'t take this item')} (${club.shelfType(t.shelf).name})</span>`;
         else if (lvl.product && lvl.product !== held.product && lvl.qty > 0) hint = `${name}<br><span class="warn">${L('Un autre produit est rangé ici', 'Another product is stocked here')}</span>`;
         else hint = `${name}<br>${key(L('Clic gauche', 'Left click'))} ${L('Ranger', 'Stock')} · ${key(L('Clic droit', 'Right click'))} ${L('Reprendre', 'Take back')}`;
       } else hint = lvl.product && lvl.qty === 0 ? `${name}<br>${key(L('Clic droit', 'Right click'))} ${L("Retirer l'étiquette", 'Remove the label')}` : name;
