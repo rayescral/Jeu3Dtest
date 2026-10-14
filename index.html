@@ -18,8 +18,8 @@
         <div class="level"><span class="lvl" id="hud-level">1</span><div class="xp"><i id="hud-xp"></i></div></div>
       </div>
       <div class="hud-row">
-        <span class="chip"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="hud-licences">0</span> licenciés</span>
-        <span class="stars" id="hud-stars" title="Satisfaction des clients"></span>
+        <span class="chip"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-width="2"/></svg><span id="hud-licences">0</span> <span data-en="members">licenciés</span></span>
+        <span class="stars" id="hud-stars" title="Satisfaction des clients" data-en-title="Customer satisfaction"></span>
       </div>
     </div>
     <div class="hud-right">
@@ -27,7 +27,7 @@
       <span class="status prep" id="hud-status">Préparation</span>
       <span class="event-chip" id="hud-event" hidden></span>
       <div id="challenge" hidden></div>
-  <div id="prep">L'horloge est arrêtée : prépare le club, puis retourne la pancarte de l'entrée sur <b>OUVERT</b> pour lancer la journée.</div>
+  <div id="prep" data-en="The clock is stopped: get the club ready, then flip the entrance sign to &lt;b&gt;OPEN&lt;/b&gt; to start the day.">L'horloge est arrêtée : prépare le club, puis retourne la pancarte de l'entrée sur <b>OUVERT</b> pour lancer la journée.</div>
     </div>
 
     <div id="crosshair"></div>
@@ -38,11 +38,11 @@
     <div id="objectives" hidden></div>
     <div id="toasts"></div>
     <div id="levelup" hidden></div>
-    <div class="keys"><kbd>E</kbd> interagir <kbd>Tab</kbd> ordinateur <kbd>G</kbd> poser <kbd>Espace</kbd> sauter <kbd>Maj</kbd> courir <kbd>Échap</kbd> pause</div>
+    <div class="keys" data-en="&lt;kbd&gt;E&lt;/kbd&gt; interact &lt;kbd&gt;Tab&lt;/kbd&gt; computer &lt;kbd&gt;G&lt;/kbd&gt; drop &lt;kbd&gt;Space&lt;/kbd&gt; jump &lt;kbd&gt;Shift&lt;/kbd&gt; run &lt;kbd&gt;Esc&lt;/kbd&gt; pause"><kbd>E</kbd> interagir <kbd>Tab</kbd> ordinateur <kbd>G</kbd> poser <kbd>Espace</kbd> sauter <kbd>Maj</kbd> courir <kbd>Échap</kbd> pause</div>
   </div>
 
-  <button id="click-to-play" hidden>Clique pour reprendre</button>
-  <div id="look-help" hidden>Ton navigateur ne permet pas de capturer la souris ici : maintiens le clic droit et glisse pour regarder autour.</div>
+  <button id="click-to-play" hidden data-en="Click to resume">Clique pour reprendre</button>
+  <div id="look-help" hidden data-en="Your browser cannot capture the mouse here: hold the right mouse button and drag to look around.">Ton navigateur ne permet pas de capturer la souris ici : maintiens le clic droit et glisse pour regarder autour.</div>
 
   <!-- Ordinateur, paiement, pause, bilan -->
   <section id="computer" class="overlay" hidden></section>
@@ -50,24 +50,25 @@
 
   <section id="pause" class="overlay" hidden>
     <div class="sheet small">
-      <p class="kicker">Pause</p>
-      <h2>Le club t'attend</h2>
+      <p class="kicker" data-en="Paused">Pause</p>
+      <h2 data-en="The club is waiting">Le club t'attend</h2>
       <div class="stack">
-        <button class="primary" id="btn-resume">Reprendre</button>
-        <button class="ghost" id="btn-save">Sauvegarder</button>
-        <button class="ghost" id="btn-mute">Couper le son</button>
+        <button class="primary" id="btn-resume" data-en="Resume">Reprendre</button>
+        <button class="ghost" id="btn-save" data-en="Save">Sauvegarder</button>
+        <button class="ghost" id="btn-mute" data-en="Mute">Couper le son</button>
         <button class="ghost" id="btn-quality">Graphismes : haute qualité</button>
-        <button class="ghost" id="btn-quit">Sauvegarder et quitter</button>
+        <button class="ghost" id="btn-lang-pause" data-en="Langue : français">Language: English</button>
+        <button class="ghost" id="btn-quit" data-en="Save and quit">Sauvegarder et quitter</button>
       </div>
       <p class="muted small" id="save-status"></p>
       <dl class="controls">
-        <dt>Z Q S D</dt><dd>Se déplacer (W A S D en QWERTY)</dd>
-        <dt>Souris</dt><dd>Regarder</dd>
-        <dt>E</dt><dd>Prendre un carton, ouvrir l'ordinateur, la pancarte, servir à la buvette ou au snack, faire sortir des joueurs en retard · maintenir pour brosser un terrain</dd>
-        <dt>Clic gauche</dt><dd>Ranger un article, scanner, encaisser</dd>
-        <dt>Clic droit</dt><dd>Reprendre un article dans le carton</dd>
-        <dt>G</dt><dd>Poser le carton</dd>
-        <dt>Tab</dt><dd>Ordinateur (depuis n'importe où)</dd>
+        <dt data-en="W A S D">Z Q S D</dt><dd data-en="Move (Z Q S D on AZERTY)">Se déplacer (W A S D en QWERTY)</dd>
+        <dt data-en="Mouse">Souris</dt><dd data-en="Look around">Regarder</dd>
+        <dt>E</dt><dd data-en="Pick up a box, use the computer or the sign, serve at the bar or snack bar, send off late players · hold to brush a court">Prendre un carton, ouvrir l'ordinateur, la pancarte, servir à la buvette ou au snack, faire sortir des joueurs en retard · maintenir pour brosser un terrain</dd>
+        <dt data-en="Left click">Clic gauche</dt><dd data-en="Stock an item, scan, take payment">Ranger un article, scanner, encaisser</dd>
+        <dt data-en="Right click">Clic droit</dt><dd data-en="Put an item back in the box">Reprendre un article dans le carton</dd>
+        <dt>G</dt><dd data-en="Put the box down">Poser le carton</dd>
+        <dt>Tab</dt><dd data-en="Computer (from anywhere)">Ordinateur (depuis n'importe où)</dd>
       </dl>
     </div>
   </section>
@@ -77,25 +78,26 @@
   <!-- Écran titre -->
   <section id="menu">
     <div class="menu-card">
-      <p class="kicker">Simulation de gestion</p>
+      <p class="kicker" data-en="Management simulation">Simulation de gestion</p>
       <h1>Tennis Club<br><span>Simulator</span></h1>
-      <p class="lede">Reprends le petit club des Platanes : un seul court en terre battue, deux étagères vides et quatre licenciés.
+      <p class="lede" data-en="Take over the little Plane Trees club: a single clay court, two empty shelves and four members. Stock the shop, serve customers, build a bar and a snack bar, charge for parking, kick out players who overrun their slot, and grow the club all the way to padel.">Reprends le petit club des Platanes : un seul court en terre battue, deux étagères vides et quatre licenciés.
         Remplis la boutique, encaisse les clients, construis une buvette et un snack, fais payer le parking, chasse les joueurs qui débordent de leur créneau, et fais grandir le club jusqu'au padel.</p>
       <div class="stack">
-        <button class="primary" id="btn-new">Nouvelle partie</button>
-        <button class="ghost" id="btn-continue" hidden>Continuer</button>
+        <button class="primary" id="btn-new" data-en="New game">Nouvelle partie</button>
+        <button class="ghost" id="btn-continue" hidden data-en="Continue">Continuer</button>
+        <button class="ghost" id="btn-lang" data-en="Langue : français">Language: English</button>
       </div>
       <dl class="controls">
-        <dt>Z Q S D + souris</dt><dd>Se déplacer et regarder</dd>
-        <dt>E</dt><dd>Interagir (maintenir pour brosser)</dd>
-        <dt>Clics</dt><dd>Ranger, scanner, encaisser</dd>
-        <dt>Tab</dt><dd>Ordinateur du club</dd>
+        <dt data-en="W A S D + mouse">Z Q S D + souris</dt><dd data-en="Move and look around">Se déplacer et regarder</dd>
+        <dt>E</dt><dd data-en="Interact (hold to brush)">Interagir (maintenir pour brosser)</dd>
+        <dt data-en="Clicks">Clics</dt><dd data-en="Stock, scan, take payment">Ranger, scanner, encaisser</dd>
+        <dt>Tab</dt><dd data-en="Club computer">Ordinateur du club</dd>
       </dl>
     </div>
   </section>
 
-  <div id="loading">Préparation du club…</div>
-  <div id="error" hidden><b>Oups, une erreur est survenue.</b><span>Recharge la page ; ta dernière sauvegarde est conservée. Détail :</span><code></code></div>
+  <div id="loading"><div><p data-en="Getting the club ready…">Préparation du club…</p><div class="loading-track"><i id="loading-bar"></i></div></div></div>
+  <div id="error" hidden><b data-en="Oops, something went wrong.">Oups, une erreur est survenue.</b><span data-en="Reload the page; your last save is kept. Details:">Recharge la page ; ta dernière sauvegarde est conservée. Détail :</span><code></code></div>
   <!-- Tout le jeu est dans jeu.js (généré par « npm run build » à partir de src/). Un script classique
        s'ouvre aussi d'un double-clic sur index.html, sans serveur. -->
   <script src="jeu.js"></script>

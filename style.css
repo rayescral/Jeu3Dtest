@@ -156,7 +156,10 @@ kbd { font: 600 12px var(--font); background: rgba(255,255,255,.92); color: var(
 
 #error { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 10; background: #fff; color: var(--ink); border-left: 6px solid var(--bad); border-radius: 12px; padding: 12px 16px; box-shadow: 0 10px 30px rgba(0,0,0,.3); display: grid; gap: 4px; max-width: min(560px, calc(100vw - 32px)); font-size: 14px; }
 #error code { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
-#loading { position: fixed; inset: 0; display: grid; place-items: center; background: #0f1f17; color: #cfe; font-size: 18px; letter-spacing: .1em; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; background: #0f1f17; color: #cfe; font-size: 18px; letter-spacing: .1em; text-align: center; }
+#loading p { margin: 0 0 14px; }
+.loading-track { width: min(320px, 70vw); height: 6px; background: rgba(255,255,255,.12); border-radius: 3px; overflow: hidden; }
+.loading-track i { display: block; height: 100%; width: 0; background: var(--ball); transition: width .2s; }
 
 /* --- Panneaux superposés --------------------------------------------------- */
 .overlay { position: fixed; inset: 0; display: grid; place-items: center; padding: 16px; box-sizing: border-box; background: rgba(8, 14, 11, .45); overflow-y: auto; }
