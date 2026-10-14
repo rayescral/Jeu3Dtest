@@ -23,11 +23,17 @@ const MODELS = [
   'exterior_aircon_unit', 'utility_box_01', 'cardboard_box_01', 'shrub_04',
 ];
 const SKIES = ['day', 'sunset', 'night'];
+// Personnages réalistes (MakeHuman, CC0) avec squelette : voir src/render/humans.js.
+export const HUMANS = [
+  'm_player_a', 'm_player_b', 'm_player_c', 'm_player_d', 'm_player_e', 'f_player_a', 'f_player_b', 'f_player_c', 'f_player_d',
+  'f_player_e', 'm_casual_a', 'm_casual_b', 'm_suit', 'm_work', 'm_staff', 'f_casual_a', 'f_suit', 'f_staff',
+];
 
 let base = null;
 export const images = {};      // nom → ImageBitmap / HTMLImageElement
 const models = {};      // nom → gltf.scene
-export const assets = { ready: false, sky: null, images, models };
+const humans = {};      // nom → gltf.scene (maillages avec squelette)
+export const assets = { ready: false, sky: null, images, models, humans };
 
 async function fetchFrom(b, path) {
   const r = await fetch(b + 'assets/' + path, { cache: b === REMOTE ? 'default' : 'no-cache' });
@@ -68,6 +74,10 @@ export async function loadAssets(onProgress = () => {}) {
     const gltf = await loader.parseAsync(buf, '');
     gltf.scene.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     models[m] = gltf.scene;
+  }]);
+  for (const h of HUMANS) jobs.push([`humans/${h}.glb`, async p => {
+    const buf = await (await get(p)).arrayBuffer();
+    humans[h] = (await loader.parseAsync(buf, '')).scene;
   }]);
   // Premier fichier seul (choix de la source), puis le reste en parallèle par paquets.
   let done = 0;

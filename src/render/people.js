@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { racketMesh } from './products.js';
 import { damp, dampAngle, clamp } from '../core/util.js';
+import { realisticBody } from './humans.js';
 
 const SKIN = [0xf3d2b3, 0xe8b894, 0xc98e66, 0x9c6644, 0x6e4630, 0xf7dcc5];
 const HAIR = [0x2b1d14, 0x5a3a22, 0x8c6239, 0xd8b26a, 0x1a1a1a, 0xa0522d, 0xc9c9c9];
@@ -26,6 +27,8 @@ function limb(len, r, material) {
 
 export function createPersonView(person) {
   const rnd = mulberry(Math.floor(person.seed * 1e9));
+  const real = realisticBody(person, mulberry(Math.floor(person.seed * 1e9) + 7));
+  if (real) return makeView(person, rnd, real);
   const pick = arr => arr[Math.floor(rnd() * arr.length)];
   // Personnel : tenue de travail selon le poste (ouvriers de chantier compris).
   const UNIFORM = { reception: 0x1f6b4a, keeper: 0x6b7a3a, security: 0x15171a, barman: 0xf2f2f0, cook: 0xffffff, worker: 0xff8c1a };
@@ -124,6 +127,33 @@ export function createPersonView(person) {
     limbs['hip' + side] = hip; limbs['knee' + side] = knee;
   }
 
+  root.scale.setScalar(scale);
+  root.traverse(o => { if (o.isMesh) o.receiveShadow = false; });
+  root.remove(body);
+  const L = limbs;
+  return makeView(person, rnd, {
+    body, hand: limbs.handR, scale,
+    setPose(a) {
+      L.hipL.rotation.x = a.hipL; L.hipR.rotation.x = a.hipR;
+      L.kneeL.rotation.x = a.kneeL; L.kneeR.rotation.x = a.kneeR;
+      L.shoulderL.rotation.x = a.shL; L.shoulderR.rotation.x = a.shR;
+      L.shoulderL.rotation.z = a.shLz; L.shoulderR.rotation.z = a.shRz;
+      L.elbowL.rotation.x = a.elL; L.elbowR.rotation.x = a.elR;
+      hips.rotation.y = a.twist; hips.rotation.x = a.lean;
+      neck.rotation.x = a.neckX;
+    },
+  });
+}
+
+// Partie commune aux deux rendus (réaliste ou simplifié) : déplacement, animations, accessoires, bulles.
+// rig : { body (groupe du corps), hand (repère de la main droite), setPose(angles), scale? }
+function makeView(person, rnd, rig) {
+  const pick = arr => arr[Math.floor(rnd() * arr.length)];
+  const root = new THREE.Group();
+  root.add(rig.body);
+  if (!rig.scale) root.scale.setScalar(0.95 + rnd() * 0.1);
+  else root.scale.setScalar(rig.scale);
+
   // Raquette dans la main droite (visible sur les courts et à l'arrivée des joueurs).
   let racket = null;
   if (person.holdsRacket) {
@@ -131,35 +161,33 @@ export function createPersonView(person) {
     racket = racketMesh(padel, pick(padel ? [0xc8f04a, 0x7a4fd6, 0xff8a3d] : [0x2f6fe0, 0xe8a21a, 0xd63a3a, 0x18191c, 0xff5fa2]));
     racket.rotation.x = Math.PI / 2;
     racket.position.set(0, -0.02, 0.02);
-    racket.scale.setScalar(1);
-    limbs.handR.add(racket);
+    rig.hand.add(racket);
   }
   // Brosse de l'agent d'entretien.
-  let broom = null;
   if (person.role === 'keeper') {
-    broom = new THREE.Group();
+    const broom = new THREE.Group();
     const stick = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, 1.4, 8), mat(0x9b7a4a, 0.6));
     stick.position.y = -0.5;
     const brush = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.06, 0.14), mat(0x3a3a3a, 0.9));
     brush.position.y = -1.2;
     broom.add(stick, brush);
     broom.rotation.x = 0.5;
-    limbs.handR.add(broom);
+    rig.hand.add(broom);
   }
 
-  root.scale.setScalar(scale);
-  root.traverse(o => { if (o.isMesh) o.receiveShadow = false; });
-
+  // Angles courants (lissés) de chaque articulation.
+  const a = { hipL: 0, hipR: 0, kneeL: 0, kneeR: 0, shL: 0, shR: 0, shLz: 0.06, shRz: -0.06, elL: -0.25, elR: -0.25, twist: 0, lean: 0, neckX: 0 };
   const view = {
-    root, body, hips, neck, limbs, racket, phase: rnd() * 10, speed: 0,
+    root, racket, phase: rnd() * 10, speed: 0,
     swingT: -1, lastX: person.x, lastZ: person.z, offsetX: 0, offsetZ: 0, lookYaw: 0,
-    bubble: null, bubbleT: 0,
+    bubble: null, bubbleT: 0, breath: rnd() * 6,
     swing() { this.swingT = 0; },
     update(dt, p) {
       // Vitesse mesurée à partir du déplacement réel.
       const vx = (p.x - this.lastX) / Math.max(dt, 1e-4), vz = (p.z - this.lastZ) / Math.max(dt, 1e-4);
       this.lastX = p.x; this.lastZ = p.z;
       root.visible = !p.hidden;
+      if (p.hidden) return;
       const sp = Math.min(3, Math.hypot(vx, vz));
       this.speed = damp(this.speed, sp, 10, dt);
       root.position.set(p.x + this.offsetX, 0, p.z + this.offsetZ);
@@ -167,20 +195,21 @@ export function createPersonView(person) {
       if (p.look && p.action === 'browse') targetRot = Math.atan2(p.look.x - p.x, p.look.z - p.z);
       root.rotation.y = dampAngle(root.rotation.y, targetRot, 10, dt);
 
-      const L = this.limbs;
       const walk = clamp(this.speed / 1.4, 0, 1.4);
       this.phase += dt * (2.2 + this.speed * 3.2);
+      this.breath += dt * 1.6;
       const s = Math.sin(this.phase);
       let hipL = s * 0.55 * walk, hipR = -s * 0.55 * walk;
       let kneeL = Math.max(0, -Math.cos(this.phase)) * 0.8 * walk, kneeR = Math.max(0, Math.cos(this.phase)) * 0.8 * walk;
-      let shL = -s * 0.45 * walk, shR = s * 0.45 * walk, elL = -0.25, elR = -0.25;
+      let shL = -s * 0.45 * walk, shR = s * 0.45 * walk, elL = -0.25 - walk * 0.15, elR = -0.25 - walk * 0.15;
       let shLz = 0.06, shRz = -0.06;
       let bob = Math.abs(Math.cos(this.phase)) * 0.035 * walk;
-      let twist = 0, lean = 0.03 * walk;
+      let twist = -s * 0.08 * walk, lean = 0.03 * walk + Math.sin(this.breath) * 0.012 * (1 - walk);
+      let neckX = 0;
 
       if (p.action === 'play') {
         // Position d'attente : genoux fléchis, raquette devant.
-        const ready = 1 - walk;
+        const ready = 1 - Math.min(1, walk);
         kneeL += 0.35 * ready; kneeR += 0.35 * ready; hipL -= 0.2 * ready; hipR -= 0.2 * ready;
         lean += 0.18 * ready; bob -= 0.06 * ready;
         shR = -0.7; elR = -0.9; shL = -0.4; elL = -0.8;
@@ -188,7 +217,7 @@ export function createPersonView(person) {
         bob += Math.abs(Math.sin(this.phase * 1.8)) * 0.025 * ready;
       } else if (p.action === 'browse') {
         shR = -1.0 + Math.sin(this.phase * 0.7) * 0.15; elR = -0.4;
-        this.neck.rotation.x = 0.15;
+        neckX = 0.15;
       } else if (p.action === 'clean') {
         const b = Math.sin(this.phase * 1.4);
         shR = -0.6 + b * 0.35; shL = -0.6 + b * 0.35; elR = -0.5; elL = -0.5; lean += 0.2;
@@ -202,9 +231,12 @@ export function createPersonView(person) {
       } else if (p.role === 'reception' || p.role === 'barman' || p.role === 'cook') {
         shR = -0.35; shL = -0.35; elR = -1.2; elL = -1.2;
       } else if (p.role === 'security') {
-        shR = 0.15; shL = 0.15; elR = -0.2; elL = -0.2;
+        // Mains jointes devant soi.
+        shR = -0.25; shL = -0.25; elR = -1.0; elL = -1.0; shLz = -0.25; shRz = 0.25;
+      } else if (person.holdsRacket && walk < 0.2) {
+        // Raquette tenue le long du corps, coude un peu plié.
+        elR = -0.5;
       }
-      if (p.action !== 'browse') this.neck.rotation.x = damp(this.neck.rotation.x, 0, 6, dt);
 
       // Coup droit : armé puis frappe de droite à gauche.
       if (this.swingT >= 0) {
@@ -217,19 +249,15 @@ export function createPersonView(person) {
         }
       }
 
-      L.hipL.rotation.x = damp(L.hipL.rotation.x, -hipL, 14, dt);
-      L.hipR.rotation.x = damp(L.hipR.rotation.x, -hipR, 14, dt);
-      L.kneeL.rotation.x = damp(L.kneeL.rotation.x, kneeL, 14, dt);
-      L.kneeR.rotation.x = damp(L.kneeR.rotation.x, kneeR, 14, dt);
-      L.shoulderL.rotation.x = damp(L.shoulderL.rotation.x, shL, 12, dt);
-      L.shoulderR.rotation.x = damp(L.shoulderR.rotation.x, shR, 16, dt);
-      L.shoulderL.rotation.z = damp(L.shoulderL.rotation.z, shLz, 12, dt);
-      L.shoulderR.rotation.z = damp(L.shoulderR.rotation.z, shRz, 16, dt);
-      L.elbowL.rotation.x = damp(L.elbowL.rotation.x, elL, 12, dt);
-      L.elbowR.rotation.x = damp(L.elbowR.rotation.x, elR, 12, dt);
-      this.hips.rotation.y = damp(this.hips.rotation.y, twist, 16, dt);
-      this.hips.rotation.x = damp(this.hips.rotation.x, lean, 8, dt);
-      this.body.position.y = bob;
+      a.hipL = damp(a.hipL, -hipL, 14, dt); a.hipR = damp(a.hipR, -hipR, 14, dt);
+      a.kneeL = damp(a.kneeL, kneeL, 14, dt); a.kneeR = damp(a.kneeR, kneeR, 14, dt);
+      a.shL = damp(a.shL, shL, 12, dt); a.shR = damp(a.shR, shR, 16, dt);
+      a.shLz = damp(a.shLz, shLz, 12, dt); a.shRz = damp(a.shRz, shRz, 16, dt);
+      a.elL = damp(a.elL, elL, 12, dt); a.elR = damp(a.elR, elR, 12, dt);
+      a.twist = damp(a.twist, twist, 16, dt); a.lean = damp(a.lean, lean, 8, dt);
+      a.neckX = damp(a.neckX, neckX, 6, dt);
+      rig.setPose(a);
+      rig.body.position.y = bob;
 
       if (this.bubble) {
         this.bubbleT -= dt;
