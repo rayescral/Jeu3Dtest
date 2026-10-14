@@ -89,7 +89,7 @@ log('après un clic dans le jeu', await p.evaluate(() => ({ capturée: __club.in
 
 // Buvette : construction (chantier accéléré), commande servie au comptoir avec E.
 await p.evaluate(() => {
-  const c = __club.club; c.s.money = 20000; c.s.xp = 200; c.addXp(1);
+  const c = __club.club; c.s.money = 20000; c.s.xp = 400; c.addXp(1);
   c.buyFacility('buvette');
   for (let t = 0; t < 70; t += 0.05) c.update(0.05, { playerAtCounter: true });
 });
@@ -99,7 +99,7 @@ const zone = await p.evaluate(() => { const c = __club.club; const box = { id: 9
 log('bière dans la boutique', zone);
 await p.evaluate(() => {
   const c = __club.club;
-  const i = __club.club.s.shelves.findIndex((sh, k) => sh.built && k >= 6);
+  const i = __club.club.s.shelves.findIndex((sh, k) => sh.built && k >= 8);   // frigos de la buvette (après les 8 emplacements de boutique)
   c.s.shelves[i].levels[0] = { product: 'beer', qty: 12 };
   c.s.shelves[i].levels[1] = { product: 'soda', qty: 12 };
   c.s.shelves[i].levels[2] = { product: 'coffee', qty: 12 };
