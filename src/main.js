@@ -580,4 +580,4 @@ function tick() {
 })();
 
 // Accès pour les tests automatisés et la console.
-window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld, viewOf: p => personViews.get(p.id) };
+window.__club = { get club() { return club; }, colliders: () => colliders, renderer, scene, player, startGame, createState, hooks, interact, input, ui, openUi, closeUi, dropHeld, viewOf: p => personViews.get(p.id), get traffic() { return traffic; } };

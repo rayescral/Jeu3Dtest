@@ -1,6 +1,7 @@
 // Extérieur : ciel photographique et cycle du jour, soleil et ombres, pelouse, allées pavées avec
 // bordures, parking, route, platanes, haies, lampadaires, panneau du club.
 import * as THREE from 'three';
+import { carModel, CAR_TYPES } from './cars.js';
 import { mergeGeometries } from './geometry.js';
 import { clamp, lerp } from '../core/util.js';
 import { grassTexture, concreteTexture, asphaltTexture, labelTexture } from './textures.js';
@@ -222,37 +223,9 @@ export function createEnvironment(scene, renderer) {
   return { setTime, sun, colliders };
 }
 
-// Voiture : silhouette latérale extrudée aux arêtes arrondies, vitres teintées, roues.
-// (exportée pour les voitures animées du parking)
-function carShape(points) {
-  const sh = new THREE.Shape();
-  points.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y)));
-  return sh;
-}
-const CAR_BODY = carShape([[-2.15, 0.3], [2.1, 0.3], [2.2, 0.55], [2.15, 0.85], [1.2, 0.98], [0.6, 1.42], [-1.0, 1.45], [-1.9, 1.05], [-2.2, 0.95], [-2.25, 0.5]]);
-const CAR_GLASS = carShape([[1.05, 1.0], [0.52, 1.36], [-0.95, 1.38], [-1.72, 1.04]]);
-let carGeo = null, glassGeo = null;
-export function car(x, z, color, rot) {
-  carGeo ??= new THREE.ExtrudeGeometry(CAR_BODY, { depth: 1.6, bevelEnabled: true, bevelSize: 0.12, bevelThickness: 0.12, bevelSegments: 5, curveSegments: 8 }).translate(0, 0, -0.8);
-  glassGeo ??= new THREE.ExtrudeGeometry(CAR_GLASS, { depth: 1.66, bevelEnabled: true, bevelSize: 0.04, bevelThickness: 0.04, bevelSegments: 3 }).translate(0, 0, -0.83);
-  const g = new THREE.Group();
-  const paint = new THREE.MeshStandardMaterial({ color, roughness: 0.25, metalness: 0.5 });
-  paint.userData.reflective = true;
-  const glassMat = new THREE.MeshStandardMaterial({ color: 0x1a2430, roughness: 0.05, metalness: 0.6 });
-  glassMat.userData.reflective = true;
-  const body = new THREE.Mesh(carGeo, paint);
-  const glass = new THREE.Mesh(glassGeo, glassMat);
-  g.add(body, glass);
-  const tire = new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.9 });
-  const rim = new THREE.MeshStandardMaterial({ color: 0xb8bcc2, metalness: 0.8, roughness: 0.3 });
-  for (const sx of [-1.35, 1.35]) for (const sz of [-0.86, 0.86]) {
-    const w = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.34, 0.24, 20).rotateX(Math.PI / 2), tire);
-    w.position.set(sx, 0.34, sz);
-    const r = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.25, 16).rotateX(Math.PI / 2), rim);
-    r.position.copy(w.position);
-    g.add(w, r);
-  }
-  g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+// Voiture (modèle dans cars.js), exportée pour les voitures animées du parking.
+export function car(x, z, color, rot, type) {
+  const g = carModel(color, type ?? CAR_TYPES[Math.floor(Math.random() * CAR_TYPES.length)]);
   g.position.set(x, 0, z);
   g.rotation.y = rot + Math.PI / 2;
   return g;
