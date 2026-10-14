@@ -17,7 +17,7 @@ export const BOX_SIZE = {
   padelballs: [0.5, 0.32, 0.36], cap: [0.5, 0.28, 0.4], energy: [0.36, 0.16, 0.26], wristband: [0.36, 0.18, 0.28],
   strings: [0.42, 0.22, 0.34], towel: [0.5, 0.3, 0.4], tshirt: [0.52, 0.28, 0.4], shoes: [0.6, 0.3, 0.42], bag: [0.8, 0.34, 0.4],
   beer: [0.5, 0.3, 0.36], soda: [0.44, 0.18, 0.3], coffee: [0.4, 0.2, 0.3], juice: [0.46, 0.28, 0.34],
-  sandwich: [0.46, 0.2, 0.36], panini: [0.46, 0.2, 0.36], pizza: [0.46, 0.12, 0.46], cookie: [0.36, 0.16, 0.28],
+  sandwich: [0.46, 0.2, 0.36], dampener: [0.36, 0.16, 0.26], socks: [0.46, 0.24, 0.34], protein: [0.46, 0.28, 0.34], crepe: [0.4, 0.14, 0.3], panini: [0.46, 0.2, 0.36], pizza: [0.46, 0.12, 0.46], cookie: [0.36, 0.16, 0.28],
 };
 for (const [id, P] of Object.entries(PRODUCTS)) if (P.racket) BOX_SIZE[id] = P.racket === 'padel' ? [0.5, 0.2, 0.6] : [0.36, 0.2, 0.78];
 
@@ -189,6 +189,47 @@ function build(product) {
         pep.position.set(x, 0.014, z);
         g.add(pep);
       }
+      break;
+    }
+    case 'dampener': {
+      // Blister : carton imprimé et deux antivibrateurs en relief.
+      const card = new THREE.Mesh(shared.dampCard ??= new THREE.BoxGeometry(0.07, 0.11, 0.008), new THREE.MeshStandardMaterial({ map: productLabel('dampener'), roughness: 0.5 }));
+      card.position.y = 0.055;
+      g.add(card);
+      for (const y of [0.075, 0.035]) {
+        const d = new THREE.Mesh(shared.damp ??= new THREE.CylinderGeometry(0.012, 0.012, 0.01, 12).rotateX(Math.PI / 2), shared.dampMat ??= std(0xf2c94c, { roughness: 0.6 }));
+        d.position.set(0, y, 0.008);
+        g.add(d);
+      }
+      break;
+    }
+    case 'socks': {
+      // Trois paires roulées, avec une bande de couleur.
+      for (const dx of [-0.045, 0, 0.045]) {
+        const s = new THREE.Mesh(shared.sock ??= new THREE.CapsuleGeometry(0.02, 0.06, 4, 10).rotateX(Math.PI / 2), shared.sockMat ??= std(0xf4f4f0, { roughness: 0.95 }));
+        s.position.set(dx, 0.02, 0);
+        const band = new THREE.Mesh(shared.sockBand ??= new THREE.CylinderGeometry(0.0205, 0.0205, 0.012, 12).rotateX(Math.PI / 2), shared.sockBandMat ??= std(0x1f6b4a, { roughness: 0.9 }));
+        band.position.set(dx, 0.02, 0.03);
+        g.add(s, band);
+      }
+      break;
+    }
+    case 'protein': {
+      const b = new THREE.Mesh(shared.shake ??= new THREE.CylinderGeometry(0.03, 0.034, 0.16, 18), new THREE.MeshStandardMaterial({ map: productLabel('protein'), roughness: 0.4 }));
+      b.position.y = 0.08;
+      const cap = new THREE.Mesh(shared.shakeCap ??= new THREE.CylinderGeometry(0.026, 0.028, 0.03, 18), shared.shakeCapMat ??= std(0x1b2420, { roughness: 0.5 }));
+      cap.position.y = 0.175;
+      g.add(b, cap);
+      break;
+    }
+    case 'crepe': {
+      // Crêpe pliée en triangle dans un cornet de papier.
+      const tri = new THREE.Shape(); tri.moveTo(-0.07, 0); tri.lineTo(0.07, 0); tri.lineTo(0, 0.1); tri.closePath();
+      const c = new THREE.Mesh(shared.crepe ??= new THREE.ExtrudeGeometry(tri, { depth: 0.012, bevelEnabled: true, bevelSize: 0.004, bevelThickness: 0.004, bevelSegments: 2 }).rotateX(-Math.PI / 2), shared.crepeMat ??= std(0xe8b864, { roughness: 0.85 }));
+      c.position.y = 0.012;
+      const paper = new THREE.Mesh(shared.crepePaper ??= new THREE.BoxGeometry(0.15, 0.004, 0.05), shared.paperMat ??= std(0xf6f3ea, { roughness: 0.9 }));
+      paper.position.set(0, 0.002, -0.02);
+      g.add(paper, c);
       break;
     }
     case 'cookie': {

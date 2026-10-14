@@ -3,7 +3,7 @@
 // Aucune dépendance au rendu : le rendu est prévenu par des "hooks". Testable sous Node.
 import {
   PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, STAFF, UPGRADES, FACILITIES, EVENTS, CHALLENGES, LEVELS, levelFor,
-  SHELF_TYPES, shelfAccepts, shelfCap,
+  SHELF_TYPES, shelfAccepts, shelfCap, CAMPAIGNS, ORGANIZE,
   SHELF_PRICE, SHELF_START, OPEN_HOUR, CLOSE_HOUR, LATE_CLOSE_HOUR, START_MONEY, START_LICENCES, START_FAME,
 } from './data.js';
 import {
@@ -845,11 +845,11 @@ export class Club {
     const hour = this.s.minute / 60;
     for (let i = 0; i < n; i++) {
       if (key === 'buvette') {
-        const w = { beer: hour < 11 ? 0.6 : 4, soda: 2 * this.ev('drinks'), coffee: hour < 11 ? 5 : 1.2, juice: 1.4 * this.ev('drinks') };
+        const w = { beer: hour < 11 ? 0.6 : 4, soda: 2 * this.ev('drinks'), coffee: hour < 11 ? 5 : 1.2, juice: 1.4 * this.ev('drinks'), protein: 1.1 * this.ev('drinks') };
         add(weighted(w, id => this.productAvailable(id)));
       } else {
         const lunch = hour >= 11.5 && hour < 14.5;
-        const w = { sandwich: lunch ? 4 : 1.5, panini: lunch ? 3 : 1, pizza: lunch ? 3 : 1.2, cookie: lunch ? 0.8 : 3 * this.ev('juniors') };
+        const w = { sandwich: lunch ? 4 : 1.5, panini: lunch ? 3 : 1, pizza: lunch ? 3 : 1.2, cookie: lunch ? 0.8 : 3 * this.ev('juniors'), crepe: lunch ? 0.8 : 2.2 * this.ev('juniors') };
         add(weighted(w, id => this.productAvailable(id)));
         if (Math.random() < 0.3) add('cookie');
       }
@@ -1044,6 +1044,24 @@ export class Club {
     sh.built = true; sh.type = type;
     sh.levels = Array.from({ length: SHELF_LEVELS }, () => ({ product: null, qty: 0 }));
     this.h.shelfBuilt(i);
+    return true;
+  }
+  // --- Communication
+  campaignDone(key) { return this.s.campaigns?.[key] === this.s.day; }
+  runCampaign(key) {
+    const C = CAMPAIGNS[key];
+    if (!C || !this.unlocked(C.level) || this.campaignDone(key) || !this.spend(C.price, 'build')) return false;
+    (this.s.campaigns ??= {})[key] = this.s.day;
+    // Plus le club est connu, moins une campagne rapporte.
+    this.addFame(C.fame * (1 - (this.s.fame ?? 0) / 130));
+    this.h.notify(T(`${C.name} : le club se fait connaître !`, `${C.name}: word about the club is spreading!`), 'good');
+    return true;
+  }
+  organize(key) {
+    const O = ORGANIZE[key];
+    if (!O || !this.unlocked(O.level) || this.s.nextEvent || !this.spend(O.price, 'build')) return false;
+    this.s.nextEvent = key;
+    this.h.notify(T(`${O.name} : c'est prévu pour demain !`, `${O.name}: it's on for tomorrow!`), 'good');
     return true;
   }
   // Démonte un meuble vide (moitié du prix remboursée) pour en installer un autre.
@@ -1266,7 +1284,7 @@ export class Club {
     const waiting = this.customers.filter(c => c.kind === 'book' && !c.court && c.state !== 'leave' && c.state !== 'terrace').length;
     if (waiting >= courts) wBook *= 0.1;
     const wShop = 0.42 * this.ev('shop');
-    const wLic = 0.13 * room;
+    const wLic = 0.13 * room * this.ev('licence');
     const wDrink = this.built('buvette') ? 0.24 * this.ev('bar') * (hour >= 17 ? 1.5 : 1) : 0;
     const wFood = this.built('snack') ? (hour >= 11.5 && hour < 14.5 ? 0.5 : 0.1) * this.ev('snack') : 0;
     const r = Math.random() * (wBook + wShop + wLic + wDrink + wFood);
@@ -1352,6 +1370,7 @@ export class Club {
     const before = s.licences;
     const drift = Math.round(s.licences * (s.satisfaction - 0.55) * 0.12 + (s.satisfaction > 0.7 && s.fame > 15 ? 1 : 0));
     const fameBefore = s.fameDayStart ?? s.fame;
+    if (s.event?.organized && ORGANIZE[s.event.id]) this.addFame(ORGANIZE[s.event.id].fame);
     s.licences = clamp(s.licences + drift, 3, this.capacity);
     const summary = {
       day: s.day, ...st, licences: s.licences, licenceDrift: s.licences - before, satisfaction: s.satisfaction, money: s.money, level: s.level,
@@ -1390,9 +1409,11 @@ export class Club {
   // Événement et défi du jour.
   rollDay() {
     const s = this.s;
-    const ids = Object.keys(EVENTS).filter(id => !(id === 'tournament' && s.level < 2));
-    const id = weighted(Object.fromEntries(ids.map(k => [k, EVENTS[k].weight])));
-    s.event = { id };
+    const ids = Object.keys(EVENTS).filter(id => EVENTS[id].weight > 0 && !(id === 'tournament' && s.level < 2));
+    // Événement organisé la veille par le joueur, sinon tiré au hasard.
+    const id = s.nextEvent && EVENTS[s.nextEvent] ? s.nextEvent : weighted(Object.fromEntries(ids.map(k => [k, EVENTS[k].weight])));
+    s.event = { id, organized: !!s.nextEvent };
+    s.nextEvent = null;
     if (id === 'promo') {
       const pool = PRODUCT_IDS.filter(p => this.productAvailable(p));
       s.event.product = pick(pool);

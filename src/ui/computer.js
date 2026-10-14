@@ -1,5 +1,5 @@
 // L'ordinateur de l'accueil ("ClubOS") : commandes, prix, terrains, aménagements, personnel, bilan.
-import { PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, UPGRADES, STAFF, LEVELS, FACILITIES, EVENTS, ZONE_LABEL, SHELF_TYPES } from '../game/data.js';
+import { PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, UPGRADES, STAFF, LEVELS, FACILITIES, EVENTS, ZONE_LABEL, SHELF_TYPES, CAMPAIGNS, ORGANIZE } from '../game/data.js';
 import { challengeText } from '../game/club.js';
 import { SHELF_SLOTS } from '../game/layout.js';
 import { fmtMoney, fmtMoney0, round10, clamp } from '../core/util.js';
@@ -12,6 +12,7 @@ const TABS = [
   ['prices', L('Prix', 'Prices'), ICON.tag],
   ['courts', L('Terrains', 'Courts'), ICON.court],
   ['club', L('Club', 'Club'), ICON.club],
+  ['comm', L('Communication', 'Marketing'), ICON.megaphone],
   ['report', L('Bilan', 'Report'), ICON.stats],
 ];
 
@@ -133,6 +134,27 @@ export function createComputer(club, { onClose, onEndDay, sound }) {
       <h3>${L('Constructions', 'Buildings')}</h3>${facilities}<h3>${L('Aménagements', 'Upgrades')}</h3>${ups}<h3>${L('Personnel', 'Staff')}</h3>${staff}`;
   }
 
+  function commView() {
+    const s = club.s;
+    const fame = Math.floor(s.fame ?? 0);
+    const camp = Object.entries(CAMPAIGNS).map(([k, C]) => {
+      const locked = s.level < C.level, done = club.campaignDone(k);
+      return `<article class="row-card"><div><h4>${C.name}</h4><p class="muted">${C.desc} · ${L('notoriété', 'reputation')} +${(C.fame * (1 - (s.fame ?? 0) / 130)).toFixed(1)}</p></div>
+        ${locked ? `<span class="lock">${L('Niveau', 'Level')} ${C.level}</span>` : done ? `<span class="pill good">${L('Faite aujourd\'hui', 'Done today')}</span>` : `<button class="primary" data-act="campaign" data-id="${k}" ${s.money < C.price ? 'disabled' : ''}>${L('Lancer', 'Launch')} · ${fmtMoney0(C.price)}</button>`}</article>`;
+    }).join('');
+    const next = s.nextEvent ? ORGANIZE[s.nextEvent] : null;
+    const org = Object.entries(ORGANIZE).map(([k, O]) => {
+      const locked = s.level < O.level;
+      return `<article class="row-card"><div><h4>${O.name}</h4><p class="muted">${O.desc} · ${L('notoriété', 'reputation')} +${O.fame}</p></div>
+        ${locked ? `<span class="lock">${L('Niveau', 'Level')} ${O.level}</span>` : s.nextEvent === k ? `<span class="pill good">${L('Prévu demain', 'Tomorrow')}</span>` : `<button class="primary" data-act="organize" data-id="${k}" ${next || s.money < O.price ? 'disabled' : ''}>${L('Organiser', 'Organize')} · ${fmtMoney0(O.price)}</button>`}</article>`;
+    }).join('');
+    return `<div class="kpis"><div><span>${L('Notoriété du club', 'Club reputation')}</span><b>${fame} / 100</b></div>
+        <div><span>${L('Clients attendus', 'Expected visitors')}</span><b>${L(fame < 15 ? 'Peu' : fame < 40 ? 'Moyen' : fame < 70 ? 'Beaucoup' : 'Énormément', fame < 15 ? 'Few' : fame < 40 ? 'Moderate' : fame < 70 ? 'Many' : 'Huge crowds')}</b></div></div>
+      <p class="muted small">${L('La notoriété attire les clients. Elle monte avec les clients contents, les constructions, les défis et la communication ; un client mécontent la fait baisser.', 'Reputation brings in customers. It grows with happy customers, new buildings, challenges and marketing; unhappy customers lower it.')}</p>
+      <h3>${L('Publicité (une fois par jour chacune)', 'Advertising (once a day each)')}</h3>${camp}
+      <h3>${L('Événements à organiser pour demain', 'Events to host tomorrow')}</h3>${org}`;
+  }
+
   function reportView() {
     const s = club.s, st = s.stats;
     const income = st.courts + st.shop + st.licenceFees + st.bar + st.snack + st.parking + st.tips + st.bonus, spent = st.orders + st.build;
@@ -167,7 +189,7 @@ export function createComputer(club, { onClose, onEndDay, sound }) {
   }
 
   function render() {
-    const views = { shop: shopView, prices: pricesView, courts: courtsView, club: clubView, report: reportView };
+    const views = { shop: shopView, prices: pricesView, courts: courtsView, club: clubView, comm: commView, report: reportView };
     root.innerHTML = `<div class="laptop"><div class="pc">
       <nav>${TABS.map(([k, label, icon]) => `<button class="${k === tab ? 'on' : ''}" data-tab="${k}">${icon}<span>${label}</span></button>`).join('')}</nav>
       <main><header><h2>${TABS.find(t => t[0] === tab)[1]}</h2>${money()}<button class="close" data-act="close" aria-label="${L('Fermer l\'ordinateur', 'Close the computer')}">${ICON.close}</button></header>
@@ -202,6 +224,8 @@ export function createComputer(club, { onClose, onEndDay, sound }) {
     if (act === 'upgrade') { if (!club.buyUpgrade(id)) sound.error(); else sound.build(); }
     if (act === 'facility') { if (!club.buyFacility(id)) sound.error(); }
     if (act === 'staff') club.setStaff(id, !club.s.staff[id]);
+    if (act === 'campaign') { if (!club.runCampaign(id)) sound.error(); else sound.build(); }
+    if (act === 'organize') { if (!club.organize(id)) sound.error(); else sound.build(); }
     if (act === 'endday') { onEndDay(); return; }
     render();
   });

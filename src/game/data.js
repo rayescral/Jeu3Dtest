@@ -15,6 +15,7 @@ export const PRODUCTS = {
   energy: { name: L('Barre énergétique', 'Energy bar'), short: L('Barre', 'Bar'), cost: 0.6, market: 2.2, box: 24, shelf: 12, level: 2, color: '#b5651d' },
   wristband: { name: L('Poignets éponge (x2)', 'Sweatbands (x2)'), short: L('Poignets', 'Sweatbands'), cost: 1.8, market: 6, box: 20, shelf: 12, level: 2, color: '#e04a4a' },
   strings: { name: L('Bobine de cordage', 'String reel'), short: L('Cordage', 'Strings'), cost: 6, market: 16, box: 10, shelf: 10, level: 3, color: '#f2c94c' },
+  dampener: { name: L('Antivibrateurs (x2)', 'Vibration dampeners (x2)'), short: L('Antivibrateurs', 'Dampeners'), cost: 1.2, market: 5, box: 24, shelf: 12, level: 2, color: '#7a4fd6' },
   padelballs: { name: L('Balles de padel', 'Padel balls'), short: L('Balles padel', 'Padel balls'), cost: 3.4, market: 7.5, box: 12, shelf: 10, level: 3, color: '#c8f04a' },
   // --- Boutique : raquettes de tennis
   racketJunior: { name: L('Raquette junior Strata 25', 'Strata 25 junior racket'), short: 'Strata Junior', brand: 'Strata', cost: 22, market: 49, box: 4, shelf: 4, level: 3, color: '#ff5fa2', racket: 'tennis' },
@@ -29,17 +30,20 @@ export const PRODUCTS = {
   cap: { name: L('Casquette du club', 'Club cap'), short: L('Casquette', 'Cap'), cost: 5.5, market: 18, box: 10, shelf: 8, level: 4, color: '#1f8a5b' },
   towel: { name: L('Serviette brodée', 'Embroidered towel'), short: L('Serviette', 'Towel'), cost: 4, market: 14, box: 12, shelf: 8, level: 4, color: '#3fb7a6' },
   tshirt: { name: L('T-shirt du club', 'Club T-shirt'), short: 'T-shirt', cost: 7, market: 24, box: 12, shelf: 8, level: 5, color: '#ffffff' },
+  socks: { name: L('Chaussettes de sport (lot de 3)', 'Sports socks (3-pack)'), short: L('Chaussettes', 'Socks'), cost: 3, market: 11, box: 12, shelf: 8, level: 3, color: '#f4f4f0' },
   shoes: { name: L('Chaussures Courtline', 'Courtline shoes'), short: L('Chaussures', 'Shoes'), cost: 38, market: 89, box: 4, shelf: 4, level: 6, color: '#f4f4f0' },
   bag: { name: L('Sac thermobag', 'Thermobag'), short: L('Sac', 'Bag'), cost: 30, market: 75, box: 4, shelf: 4, level: 7, color: '#1c1f24' },
   // --- Buvette
   beer: { name: L('Bière pression', 'Draught beer'), short: L('Bière', 'Beer'), cost: 0.8, market: 3.5, box: 24, shelf: 12, level: 2, color: '#f2b632', zone: 'bar' },
   soda: { name: L('Soda en canette', 'Canned soda'), short: 'Soda', cost: 0.45, market: 2.2, box: 24, shelf: 12, level: 2, color: '#d62d2d', zone: 'bar' },
   coffee: { name: L('Café', 'Coffee'), short: L('Café', 'Coffee'), cost: 0.2, market: 1.5, box: 30, shelf: 12, level: 2, color: '#6b4226', zone: 'bar' },
+  protein: { name: L('Shake protéiné', 'Protein shake'), short: L('Shake', 'Shake'), cost: 1.1, market: 3.9, box: 12, shelf: 10, level: 3, color: '#5b8def', zone: 'bar' },
   juice: { name: L('Jus d\'orange', 'Orange juice'), short: L('Jus', 'Juice'), cost: 0.6, market: 2.5, box: 18, shelf: 12, level: 4, color: '#ffa31a', zone: 'bar' },
   // --- Snack
   sandwich: { name: L('Sandwich jambon-beurre', 'Ham and butter sandwich'), short: 'Sandwich', cost: 1.5, market: 4.5, box: 12, shelf: 8, level: 3, color: '#e9c46a', zone: 'snack' },
   panini: { name: L('Panini trois fromages', 'Three-cheese panini'), short: 'Panini', cost: 1.8, market: 5.5, box: 12, shelf: 8, level: 3, color: '#d4a373', zone: 'snack' },
   pizza: { name: L('Part de pizza', 'Slice of pizza'), short: 'Pizza', cost: 1.3, market: 3.9, box: 12, shelf: 8, level: 4, color: '#e76f51', zone: 'snack' },
+  crepe: { name: L('Crêpe au sucre', 'Sugar crêpe'), short: L('Crêpe', 'Crêpe'), cost: 0.4, market: 2.8, box: 20, shelf: 10, level: 3, color: '#f3d79b', zone: 'snack' },
   cookie: { name: L('Cookie maison', 'Homemade cookie'), short: 'Cookie', cost: 0.35, market: 1.8, box: 24, shelf: 12, level: 3, color: '#a0703c', zone: 'snack' },
 };
 for (const P of Object.values(PRODUCTS)) P.zone ??= 'shop';
@@ -74,12 +78,12 @@ export const FACILITIES = {
 export const SHELF_PRICE = 450;          // une étagère de boutique supplémentaire (gondole)
 // Meubles de boutique, tous de la même emprise (2,1 m × 0,6 m). levels : nombre d'emplacements ;
 // cap : multiplicateur de la contenance de chaque emplacement ; only : articles acceptés (null = tous).
-const SMALL = ['balls', 'padelballs', 'grip', 'wristband', 'energy', 'strings'];
+const SMALL = ['balls', 'padelballs', 'grip', 'wristband', 'energy', 'strings', 'dampener'];
 export const SHELF_TYPES = {
   gondola: { name: L('Gondole', 'Gondola'), desc: L('3 tablettes, tous les articles', '3 shelves, any item'), price: 450, levels: 3, cap: 1, level: 1, only: null },
   bin: { name: L('Bacs à vrac', 'Dump bins'), desc: L('2 grands bacs pour balles, grips, poignets, barres et cordages : contenance ×2,5', '2 large bins for balls, grips, sweatbands, bars and strings: 2.5× capacity'), price: 380, levels: 2, cap: 2.5, level: 2, only: SMALL },
   racketWall: { name: L('Mur à raquettes', 'Racket wall'), desc: L('Raquettes suspendues, manche en bas, sur 2 rangées : contenance ×2', 'Rackets hung handle down on 2 rows: 2× capacity'), price: 700, levels: 2, cap: 2, level: 3, only: 'racket' },
-  table: { name: L('Table de présentation', 'Display table'), desc: L('Textile, chaussures et sacs, sur une table et un plateau : contenance ×1,5', 'Apparel, shoes and bags on a table and a top tier: 1.5× capacity'), price: 520, levels: 2, cap: 1.5, level: 4, only: ['cap', 'towel', 'tshirt', 'bag', 'shoes'] },
+  table: { name: L('Table de présentation', 'Display table'), desc: L('Textile, chaussures et sacs, sur une table et un plateau : contenance ×1,5', 'Apparel, shoes and bags on a table and a top tier: 1.5× capacity'), price: 520, levels: 2, cap: 1.5, level: 4, only: ['cap', 'towel', 'tshirt', 'bag', 'shoes', 'socks'] },
 };
 export const shelfAccepts = (type, id) => {
   const T = SHELF_TYPES[type] ?? SHELF_TYPES.gondola;
@@ -119,7 +123,23 @@ export const EVENTS = {
   champion: { name: L('Visite d\'une championne', 'Champion visit'), desc: L('Une joueuse pro signe des autographes : foule et ventes de raquettes.', 'A pro player signs autographs: crowds and racket sales.'), weight: 0.8, rate: 1.5, rackets: 3, xp: 1.3 },
   promo: { name: L('Promo fournisseur', 'Supplier deal'), desc: L('Un article est 40 % moins cher à commander aujourd\'hui.', 'One item is 40% cheaper to order today.'), weight: 1 },
   inspection: { name: L('Visite de la ligue', 'League inspection'), desc: L('Un inspecteur passe à 16 h : des terrains propres rapportent une prime.', 'An inspector comes at 4 pm: clean courts earn a bonus.'), weight: 0.9 },
+  // Événement organisé par le joueur uniquement (poids nul : jamais tiré au hasard).
+  openday: { name: L('Journée portes ouvertes', 'Open day'), desc: L('Le club accueille le public : beaucoup de curieux et de nouvelles licences.', 'The club welcomes the public: lots of visitors and new members.'), weight: 0, rate: 1.35, licence: 2.6, xp: 1.1 },
   kids: { name: L('Mercredi des enfants', 'Kids\' Wednesday'), desc: L('Stage junior : raquettes junior, cookies et sodas très demandés.', 'Junior camp: junior rackets, cookies and sodas in high demand.'), weight: 0.9, juniors: 3, snack: 1.4 },
+};
+
+// Communication (onglet de l'ordinateur) : campagnes de publicité, une fois par jour chacune, qui font
+// connaître le club (notoriété) ; événements à organiser pour le lendemain.
+export const CAMPAIGNS = {
+  flyers: { name: L('Affiches et flyers', 'Posters and flyers'), desc: L('Dans les commerces du quartier', 'In local shops'), price: 120, fame: 2, level: 1 },
+  social: { name: L('Publicité sur les réseaux sociaux', 'Social media ads'), desc: L('Vidéos du club et offres de bienvenue', 'Club videos and welcome offers'), price: 260, fame: 3.5, level: 2 },
+  paper: { name: L('Article dans le journal local', 'Local newspaper feature'), desc: L('Une pleine page sur le club', 'A full-page story about the club'), price: 480, fame: 5.5, level: 3 },
+  radio: { name: L('Spot à la radio', 'Radio ad'), desc: L('Toute la région entend parler du club', 'The whole area hears about the club'), price: 950, fame: 9, level: 5 },
+};
+export const ORGANIZE = {
+  tournament: { name: L('Organiser le tournoi du club', 'Host the club tournament'), desc: L('Demain : réservations et spectateurs en masse', 'Tomorrow: lots of bookings and spectators'), price: 400, level: 2, fame: 4 },
+  openday: { name: L('Journée portes ouvertes', 'Open day'), desc: L('Demain : visiteurs curieux et nouvelles licences', 'Tomorrow: curious visitors and new members'), price: 250, level: 2, fame: 3 },
+  kids: { name: L('Stage enfants', 'Kids camp'), desc: L('Demain : raquettes junior, cookies et sodas', 'Tomorrow: junior rackets, cookies and sodas'), price: 300, level: 3, fame: 3 },
 };
 
 // Défis du jour : récompense si l'objectif est atteint avant la fin de la journée.

@@ -16,8 +16,8 @@ const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness
 const H = 2.8;                    // hauteur des murs
 
 const THEME = {
-  buvette: { title: L('BUVETTE', 'BAR'), stripe: ['#c0392b', '#fbfaf6'], wall: 0x6b4a2e, accent: 0xc0392b, items: ['beer', 'soda', 'coffee', 'juice'] },
-  snack: { title: L('SNACK', 'SNACK BAR'), stripe: ['#f2c94c', '#1f6b4a'], wall: 0x2f6f5a, accent: 0xf2c94c, items: ['sandwich', 'panini', 'pizza', 'cookie'] },
+  buvette: { title: L('BUVETTE', 'BAR'), stripe: ['#c0392b', '#fbfaf6'], wall: 0x6b4a2e, accent: 0xc0392b, items: ['beer', 'soda', 'coffee', 'juice', 'protein'] },
+  snack: { title: L('SNACK', 'SNACK BAR'), stripe: ['#f2c94c', '#1f6b4a'], wall: 0x2f6f5a, accent: 0xf2c94c, items: ['sandwich', 'panini', 'pizza', 'crepe', 'cookie'] },
 };
 
 function boxMesh(w, h, d, material, { cast = true, receive = true } = {}) {
@@ -228,11 +228,11 @@ export function createStands(scene, interactables, state) {
       g.strokeStyle = '#8a6b45'; g.lineWidth = 14; g.strokeRect(7, 7, w - 14, h - 14);
       g.fillStyle = '#f4f1ea'; g.font = '700 40px Outfit, Arial'; g.textAlign = 'center';
       g.fillText(key === 'buvette' ? L('À BOIRE', 'DRINKS') : L('À MANGER', 'FOOD'), w / 2, 62);
-      g.font = '500 32px Outfit, Arial';
+      g.font = '500 29px Outfit, Arial';
       T.items.forEach((id, i) => {
         g.textAlign = 'left'; g.fillStyle = state.level >= PRODUCTS[id].level ? '#f4f1ea' : 'rgba(244,241,234,0.35)';
-        g.fillText(PRODUCTS[id].short, 40, 130 + i * 62);
-        g.textAlign = 'right'; g.fillText(prices ? fmtMoney(prices[id]) : '', w - 40, 130 + i * 62);
+        g.fillText(PRODUCTS[id].short, 40, 122 + i * 52);
+        g.textAlign = 'right'; g.fillText(prices ? fmtMoney(prices[id]) : '', w - 40, 122 + i * 52);
       });
     });
     const menuMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 1.05), new THREE.MeshStandardMaterial({ map: menu.tex, roughness: 0.8 }));

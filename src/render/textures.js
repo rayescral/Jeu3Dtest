@@ -263,7 +263,7 @@ export const productLabel = (product) => memo('lbl-' + product, () => canvasText
     water: ['#dff1fb', '#2a7cc0', 'SOURCE'], iso: ['#ff8a3d', '#ffffff', 'BOOST'],
     energy: ['#b5651d', '#ffe9a8', 'POWER'], shoes: ['#ffffff', '#f26b3a', 'COURTLINE'],
     beer: ['#f2e6c4', '#7a1f1f', 'BLONDE'], soda: ['#d62d2d', '#ffffff', 'FIZZ'], coffee: ['#f4efe6', '#6b4226', L('CAFÉ', 'COFFEE')],
-    juice: ['#ffa31a', '#ffffff', 'ORANGE'],
+    juice: ['#ffa31a', '#ffffff', 'ORANGE'], protein: ['#1b3a7a', '#ffffff', 'PROTEIN'], dampener: ['#7a4fd6', '#ffffff', 'DAMP'],
   };
   const [bg, fg, brand] = palettes[product] || ['#ffffff', P.color, P.short];
   g.fillStyle = bg; g.fillRect(0, 0, w, h);
