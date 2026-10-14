@@ -9,7 +9,10 @@
   "enableServer": true,
   "enableNativeAPI": false,
   "tokenSecurity": "one-time",
-  "logging": { "enabled": false, "writeToLogFile": false },
+  "logging": {
+    "enabled": false,
+    "writeToLogFile": false
+  },
   "nativeAllowList": [],
   "globalVariables": {},
   "modes": {
@@ -28,7 +31,8 @@
       "maximize": false,
       "hidden": false,
       "resizable": true,
-      "exitProcessOnClose": true
+      "exitProcessOnClose": true,
+      "webviewArgs": "--force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy"
     }
   },
   "cli": {
@@ -37,5 +41,6 @@
     "extensionsPath": "/extensions/",
     "binaryVersion": "6.3.0",
     "clientVersion": "6.3.0"
-  }
+  },
+  "webviewArgs": "--force_high_performance_gpu --ignore-gpu-blocklist --enable-gpu-rasterization --enable-zero-copy"
 }

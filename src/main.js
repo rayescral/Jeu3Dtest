@@ -57,11 +57,14 @@ try { const q = localStorage.getItem('tennis-club-quality'); if (QUALITIES.inclu
 let resScale = 1;
 const baseRatio = () => (quality === 'ultra' ? Math.min(devicePixelRatio, 2) : quality === 'high' ? Math.min(devicePixelRatio, 1.5) : Math.min(devicePixelRatio, 1));
 // Rendu logiciel (navigateur sans accélération graphique) : le jeu ne peut pas être fluide, on prévient le joueur.
+let gpuName = '?';
 const softwareGL = (() => {
   try {
     const gl = renderer.getContext(), ext = gl.getExtension('WEBGL_debug_renderer_info');
-    const name = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER);
-    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(String(name));
+    const name = String(ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER));
+    // Nom court de la carte graphique utilisée (affiché avec F3), ex. « NVIDIA GeForce RTX 3060 Laptop GPU ».
+    gpuName = (name.match(/(NVIDIA[^,(]*|AMD[^,(]*|Radeon[^,(]*|Intel[^,(]*|Apple[^,(]*|SwiftShader|llvmpipe)/i)?.[0] ?? name).trim().slice(0, 48);
+    return /swiftshader|llvmpipe|softpipe|software|basic render/i.test(name);
   } catch { return false; }
 })();
 function applyQuality() {
@@ -568,7 +571,7 @@ let menuT = 0, birdT = 4, stepPhase = 0, lastW = 0, lastH = 0;
 // Adaptation automatique à l'ordinateur : si l'image ralentit (moins de 38 images/s), on allège par paliers
 // — ombres moins souvent recalculées, puis sans ombres, puis définition un peu réduite — et on revient en arrière
 // quand tout est fluide. En « ultra », rien n'est touché.
-const fps = { t: 0, n: 0, frame: 0, rate: 60, good: 0, level: 0 };
+const fps = { t: 0, n: 0, frame: 0, rate: 60, good: 0, level: 0, js: 0, draw: 0 };
 const LEVELS_PERF = [
   { shadowEvery: 2, shadows: true, scale: 1 },
   { shadowEvery: 4, shadows: true, scale: 1 },
@@ -588,7 +591,10 @@ function adaptResolution(realDt) {
   if (fps.t < 2) return;
   fps.rate = fps.n / fps.t;
   fps.t = 0; fps.n = 0;
-  if (fpsBox) fpsBox.textContent = `${Math.round(fps.rate)} ${L('images/s', 'fps')} · ${L('palier', 'level')} ${fps.level}${softwareGL ? L(' · sans carte graphique', ' · no GPU') : ''}`;
+  const n = Math.max(1, fps.frames2 ?? 1);
+  window.__perfStats = { fps: fps.rate, js: fps.js / n, draw: fps.draw / n, level: fps.level, gpu: gpuName };
+  if (fpsBox) fpsBox.textContent = `${Math.round(fps.rate)} ${L('images/s', 'fps')} · ${L('palier', 'level')} ${fps.level} · ${L('jeu', 'game')} ${(fps.js / n).toFixed(1)} ms · ${L('envoi', 'submit')} ${(fps.draw / n).toFixed(1)} ms · ${gpuName}${softwareGL ? L(' · sans carte graphique', ' · no GPU') : ''}`;
+  fps.js = 0; fps.draw = 0; fps.frames2 = 0;
   if (quality === 'ultra' || document.hidden || mode !== 'play') return;
   if (fps.rate < 38 && fps.level < LEVELS_PERF.length - 1) { fps.good = 0; applyPerfLevel(fps.level + 1); }
   // Une fois les ombres coupées, on ne les rallume plus (chaque bascule fige l'image un instant).
@@ -607,6 +613,7 @@ addEventListener('keydown', e => {
 });
 
 function tick() {
+  const tStart = performance.now();
   const realDt = clock.getDelta();
   const dt = Math.min(realDt, 0.05);
   adaptResolution(realDt);
@@ -647,7 +654,9 @@ function tick() {
     const lh = !(input.fallback && mode === 'play' && !input.uiOpen);
     if ($('look-help').hidden !== lh) $('look-help').hidden = lh;
   }
+  const tDraw = performance.now();
   renderer.render(scene, camera);
+  fps.js += tDraw - tStart; fps.draw += performance.now() - tDraw; fps.frames2 = (fps.frames2 ?? 0) + 1;
 }
 // Démarrage : ressources graphiques (textures photographiques, ciels, modèles 3D), puis la scène.
 (async () => {
