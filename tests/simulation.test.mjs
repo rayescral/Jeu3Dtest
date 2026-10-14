@@ -81,7 +81,7 @@ function invariants(tag) {
 }
 
 const lifetimes = new Map();
-for (let day = 1; day <= 8; day++) {
+for (let day = 1; day <= 12; day++) {
   club.toggleOpen();
   let t = 0;
   const serveCounter = day !== 3;      // le jour 3, personne n'est à la caisse (test de patience)
@@ -97,7 +97,7 @@ for (let day = 1; day <= 8; day++) {
   console.log(`Jour ${day} (${t.toFixed(0)} s) : clients ${sum.customers}, contents ${sum.happy}, mécontents ${sum.angry}, ` +
     `courts ${sum.courts.toFixed(0)} €, boutique ${sum.shop.toFixed(0)} €, buvette ${sum.bar.toFixed(0)} €, snack ${sum.snack.toFixed(0)} €, parking ${sum.parking.toFixed(0)} €, ` +
     `licences ${sum.licenceFees.toFixed(0)} € (${sum.licences} licenciés), dépassements ${sum.evictions}, événement ${sum.event}, défi ${sum.challenge?.done ? 'réussi' : 'raté'}, ` +
-    `argent ${state.money.toFixed(0)} €, niveau ${state.level}, satisfaction ${(state.satisfaction * 5).toFixed(1)}/5`);
+    `argent ${state.money.toFixed(0)} €, niveau ${state.level}, notoriété ${state.fame.toFixed(0)}, satisfaction ${(state.satisfaction * 5).toFixed(1)}/5`);
   club.nextDay();
   invariants(`après jour ${day}`);
 }

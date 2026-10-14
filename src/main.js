@@ -344,6 +344,7 @@ function showSummary(s) {
       <div><span>${L('Résultat', 'Result')}</span><b class="${income - expenses >= 0 ? 'pos' : 'neg'}">${income - expenses >= 0 ? '+' : ''}${fmtMoney(income - expenses)}</b></div>
       <div><span>${L('Clients', 'Customers')}</span><b>${s.customers}</b><small>${L(`${s.happy} satisfaits · ${s.angry} mécontents`, `${s.happy} happy · ${s.angry} unhappy`)}</small></div>
       <div><span>${L('Licenciés', 'Members')}</span><b>${s.licences}</b><small>${L(`${s.newLicences} nouvelles licences`, `${s.newLicences} new members`)}${drift ? ` · ${drift > 0 ? '+' : ''}${drift} ${L('bouche-à-oreille', 'word of mouth')}` : ''}</small></div>
+      <div><span>${L('Notoriété', 'Reputation')}</span><b>${Math.floor(s.fame ?? 0)} / 100</b><small>${(s.fameDelta ?? 0) >= 0 ? '+' : ''}${(s.fameDelta ?? 0).toFixed(1)} ${L('aujourd\'hui', 'today')}</small></div>
       <div><span>${L('Satisfaction', 'Satisfaction')}</span><b>${(s.satisfaction * 5).toFixed(1)} / 5</b></div>
     </div>
     <p class="sum-extra">${ev.name}${s.challenge ? ` · ${L(`Défi « ${s.challenge.text} » :`, `Challenge "${s.challenge.text}":`)} ${s.challenge.done ? `<b class="pos">${L('réussi', 'done')}</b>` : `<b class="neg">${L('raté', 'failed')}</b>`}` : ''}${s.evictions ? ` · ${L(`${s.evictions} groupe${s.evictions > 1 ? 's' : ''} sorti${s.evictions > 1 ? 's' : ''} du terrain`, `${s.evictions} group${s.evictions > 1 ? 's' : ''} sent off court`)}` : ''}</p>

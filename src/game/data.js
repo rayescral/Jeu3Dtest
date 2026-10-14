@@ -119,7 +119,8 @@ export const CHALLENGES = [
 ];
 
 // XP nécessaire pour atteindre chaque niveau (index = niveau - 1).
-export const LEVELS = [0, 120, 350, 750, 1350, 2200, 3300, 4800, 6600, 9000];
+// (seuils relevés : la progression doit prendre plusieurs journées par niveau)
+export const LEVELS = [0, 300, 900, 1900, 3300, 5200, 7600, 10500, 14000, 18000];
 export const levelFor = xp => { let l = 1; while (l < LEVELS.length && xp >= LEVELS[l]) l++; return l; };
 
 export const OPEN_HOUR = 8;
@@ -127,3 +128,4 @@ export const CLOSE_HOUR = 21;
 export const LATE_CLOSE_HOUR = 23;
 export const START_MONEY = 2500;
 export const START_LICENCES = 4;
+export const START_FAME = 3;           // notoriété de départ (sur 100)

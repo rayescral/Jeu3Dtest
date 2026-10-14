@@ -3,7 +3,7 @@
 // Aucune dépendance au rendu : le rendu est prévenu par des "hooks". Testable sous Node.
 import {
   PRODUCTS, PRODUCT_IDS, COURTS, COURT_TYPES, SERVICES, STAFF, UPGRADES, FACILITIES, EVENTS, CHALLENGES, LEVELS, levelFor,
-  SHELF_PRICE, SHELF_START, OPEN_HOUR, CLOSE_HOUR, LATE_CLOSE_HOUR, START_MONEY, START_LICENCES,
+  SHELF_PRICE, SHELF_START, OPEN_HOUR, CLOSE_HOUR, LATE_CLOSE_HOUR, START_MONEY, START_LICENCES, START_FAME,
 } from './data.js';
 import {
   SPAWN, FRONT_OUT, FRONT_IN, BACK_IN, BACK_OUT, QUEUE, LOBBY, SHELF_SLOTS, COURT_SLOTS, STAFF_SPOT,
@@ -31,7 +31,7 @@ export function createState() {
   const s = {
     version: SAVE_VERSION,
     money: START_MONEY, day: 1, minute: OPEN_HOUR * 60, open: false, dayStarted: false,
-    xp: 0, level: 1, licences: START_LICENCES, satisfaction: 0.62,
+    xp: 0, level: 1, licences: START_LICENCES, satisfaction: 0.62, fame: START_FAME,
     prices: {},
     courts: Object.fromEntries(COURTS.map((c, i) => [c.id, { built: i === 0, wear: 0 }])),
     shelves: [],
@@ -73,6 +73,8 @@ export function migrateState(s) {
   for (const k of Object.keys(UPGRADES)) s.upgrades[k] ??= false;
   s.stats = { ...freshStats(), ...s.stats };
   s.event ??= { id: 'calm' };
+  // Notoriété (ajoutée après coup) : estimée d'après le niveau atteint.
+  s.fame ??= clamp(START_FAME + ((s.level ?? 1) - 1) * 7, 0, 100);
   s.challenge ??= null;
   s.version = SAVE_VERSION;
   return s;
@@ -138,6 +140,9 @@ export class Club {
     this.s.money -= amount; this.s.stats[cat] += amount;
     return true;
   }
+  // Notoriété du club (0 à 100) : c'est elle qui attire les clients. Elle monte avec les clients contents,
+  // les parties jouées, les constructions et les défis ; elle baisse avec les clients mécontents.
+  addFame(n) { this.s.fame = clamp((this.s.fame ?? START_FAME) + n, 0, 100); }
   addXp(n) {
     this.s.xp += Math.round(n * this.ev('xp'));
     const lvl = levelFor(this.s.xp);
@@ -167,6 +172,7 @@ export class Club {
     const map = { shopItems: 'shopItems', bookings: 'bookings', licences: 'newLicences', barItems: 'barItems', snackItems: 'snackItems', rackets: 'rackets', evictions: 'evictions' };
     if (map[ch.id] === stat && this.s.stats[stat] >= ch.target) {
       ch.done = true;
+      this.addFame(2);
       this.earn(ch.reward, 'bonus');
       this.addXp(30);
       this.h.notify(T(`Défi réussi ! +${ch.reward} €`, `Challenge complete! +€${ch.reward}`), 'good');
@@ -929,6 +935,10 @@ export class Club {
       else this.carDepart(cust.car);
     }
     this.s.satisfaction = clamp(this.s.satisfaction * 0.9 + cust.mood * 0.1, 0, 1);
+    // Bouche-à-oreille : un client content fait un peu de publicité, un mécontent en fait beaucoup plus.
+    // (plus le club est déjà connu, plus il est difficile de gagner en notoriété)
+    const fameNow = this.s.fame ?? START_FAME;
+    this.addFame(cust.mood >= 0.75 ? 0.09 * (1 - fameNow / 125) : cust.mood < 0.5 ? -0.3 : 0);
     if (cust.mood >= 0.75) this.s.stats.happy++;
     else if (cust.mood < 0.5) this.s.stats.angry++;
   }
@@ -1008,6 +1018,7 @@ export class Club {
     if (!this.spend(c.price, 'build')) return false;
     st.built = true; st.wear = 0;
     this.addXp(40);
+    this.addFame(3);
     this.h.courtChanged(id, true);
     this.h.notify(T(`${c.label} construit !`, `${c.label} built!`), 'good');
     return true;
@@ -1024,6 +1035,7 @@ export class Club {
     if (!u || this.s.upgrades[key] || !this.unlocked(u.level)) return false;
     if (!this.spend(u.price, 'build')) return false;
     this.s.upgrades[key] = true;
+    this.addFame(2);
     this.h.upgradeBought(key);
     return true;
   }
@@ -1045,6 +1057,7 @@ export class Club {
         f.building = false; f.built = true;
         SHELF_SLOTS.forEach((slot, i) => { if (slot.stand === key) { this.s.shelves[i].built = true; this.h.shelfBuilt(i, true); } });
         this.addXp(30);
+        this.addFame(4);
         this.syncStaff();
         this.h.facilityChanged(key, true);
         const tips = { buvette: T('Commande des boissons sur l\'ordinateur et range-les dans le frigo de la buvette.', 'Order drinks on the computer and stock them in the bar fridge.'), snack: T('Commande des sandwichs sur l\'ordinateur et range-les dans la vitrine du snack.', 'Order sandwiches on the computer and stock them in the snack bar display.'), parking: T('Le prix du ticket se règle dans l\'onglet Prix.', 'Set the ticket price in the Prices tab.') };
@@ -1208,9 +1221,11 @@ export class Club {
   arrivalRate() {
     const hour = this.s.minute / 60;
     const hf = hour < 11 ? 0.75 : hour < 14 ? 1.25 : hour < 17 ? 0.85 : hour < 20 ? 1.45 : 0.9;
-    let rate = (1.7 + 0.075 * this.s.licences) * hf * (0.55 + 0.9 * this.s.satisfaction) * this.ev('rate');
-    if (this.built('buvette')) rate += 0.5 * hf;
-    if (this.built('snack')) rate += (hour >= 11.5 && hour < 14.5 ? 1.4 : 0.3);
+    // Le club se fait connaître petit à petit : peu de monde au début, l'affluence suit la notoriété.
+    const fame = this.s.fame ?? START_FAME;
+    let rate = (0.6 + 0.055 * fame + 0.015 * this.s.licences) * hf * (0.6 + 0.8 * this.s.satisfaction) * this.ev('rate');
+    if (this.built('buvette')) rate += (0.2 + fame * 0.006) * hf;
+    if (this.built('snack')) rate += (hour >= 11.5 && hour < 14.5 ? 0.6 + fame * 0.015 : 0.15);
     // Un parking trop cher fait fuir une partie des visiteurs.
     if (this.built('parking')) rate *= clamp(1.25 - 0.25 * this.s.prices.parking / SERVICES.parking.market, 0.4, 1.05);
     return rate;   // clients par heure de jeu
@@ -1283,6 +1298,7 @@ export class Club {
     const clean = built.every(c => this.s.courts[c.id].wear < 0.45);
     if (clean) {
       this.earn(300, 'bonus');
+      this.addFame(3);
       this.s.satisfaction = clamp(this.s.satisfaction + 0.05, 0, 1);
       this.addXp(40);
       this.h.notify(T('Visite de la ligue : terrains impeccables ! Prime de 300 €', 'League inspection: spotless courts! €300 bonus'), 'good');
@@ -1307,10 +1323,12 @@ export class Club {
     st.salaries += salaries; st.upkeep += upkeep;
     // Le bouche-à-oreille fait évoluer le nombre de licenciés.
     const before = s.licences;
-    const drift = Math.round(s.licences * (s.satisfaction - 0.55) * 0.12 + (s.satisfaction > 0.7 ? 1 : 0));
+    const drift = Math.round(s.licences * (s.satisfaction - 0.55) * 0.12 + (s.satisfaction > 0.7 && s.fame > 15 ? 1 : 0));
+    const fameBefore = s.fameDayStart ?? s.fame;
     s.licences = clamp(s.licences + drift, 3, this.capacity);
     const summary = {
       day: s.day, ...st, licences: s.licences, licenceDrift: s.licences - before, satisfaction: s.satisfaction, money: s.money, level: s.level,
+      fame: s.fame, fameDelta: s.fame - fameBefore,
       event: s.event?.id, challenge: s.challenge ? { ...s.challenge, text: challengeText(s.challenge) } : null,
     };
     this.h.dayEnded(summary);
@@ -1320,6 +1338,7 @@ export class Club {
   nextDay() {
     const s = this.s;
     s.day++;
+    s.fameDayStart = s.fame;
     s.minute = OPEN_HOUR * 60;
     s.open = false;
     s.dayStarted = false;

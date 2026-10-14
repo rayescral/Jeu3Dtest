@@ -33,7 +33,7 @@ export function createHud() {
   return {
     update(club, ui) {
       const s = club.s;
-      const key = [Math.round(s.money * 100), s.level, Math.floor(club.xpProgress() * 100), s.licences, Math.round(s.satisfaction * 50), Math.floor(s.minute), s.open, s.day, club.capacity, s.dayStarted].join('|');
+      const key = [Math.round(s.money * 100), s.level, Math.floor(s.fame ?? 0), Math.floor(club.xpProgress() * 100), s.licences, Math.round(s.satisfaction * 50), Math.floor(s.minute), s.open, s.day, club.capacity, s.dayStarted].join('|');
       if (key !== lastKey) {
         lastKey = key;
         $('hud-money').textContent = fmtMoney(s.money);
@@ -41,6 +41,7 @@ export function createHud() {
         $('hud-xp').style.width = `${(club.xpProgress() * 100).toFixed(1)}%`;
         $('hud-licences').textContent = `${s.licences} / ${club.capacity}`;
         $('hud-stars').innerHTML = stars(s.satisfaction * 5);
+        $('hud-fame').textContent = Math.floor(s.fame ?? 0);
         $('hud-day').textContent = L(`Jour ${s.day}`, `Day ${s.day}`);
         $('hud-clock').textContent = fmtClock(s.minute);
         const st = $('hud-status');

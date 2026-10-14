@@ -132,6 +132,7 @@ export function createComputer(club, { onClose, onEndDay, sound }) {
         <div><span>${L('Recettes du jour', 'Today\'s income')}</span><b>${fmtMoney(income)}</b></div>
         <div><span>${L('Dépenses du jour', 'Today\'s spending')}</span><b>${fmtMoney(spent)}</b></div>
         <div><span>${L('Licenciés', 'Members')}</span><b>${s.licences} / ${club.capacity}</b></div>
+        <div><span>${L('Notoriété', 'Reputation')}</span><b>${Math.floor(s.fame ?? 0)} / 100</b></div>
         <div><span>${L('Niveau', 'Level')} ${s.level}</span><b>${next}</b></div>
       </div>
       <p class="muted"><b>${ev.name}</b> · ${ev.desc}${s.challenge ? `<br>${L('Défi du jour :', 'Daily challenge:')} ${challengeText(s.challenge)} (${s.challenge.done ? L('réussi', 'done') : L(`${s.challenge.reward} € à gagner`, `€${s.challenge.reward} to win`)})` : ''}</p>
